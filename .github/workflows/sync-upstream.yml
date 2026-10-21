@@ -132,14 +132,24 @@ jobs:
 
       - name: Set up Android SDK
         if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
-        uses: android-actions/setup-android@v3
+        run: |
+          set -e
+          # На раннерах GitHub SDK уже есть (/usr/local/lib/android/sdk) вместе с cmdline-tools.
+          # Экшен android-actions/setup-android@v3 не используем: он пытается поставить
+          # устаревший пакет "tools" и валит воркфлоу ("Failed to find package 'tools'").
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          sdkmanager --version
 
       - name: Install SDK packages
         if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
         run: |
-          yes | sdkmanager --licenses > /dev/null
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" \
-                    "ndk;27.2.12479018" "cmake;3.22.1"
+          set -e
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null
+          sdkmanager --sdk_root="$ANDROID_HOME" \
+            "platform-tools" "platforms;android-36" "build-tools;36.0.0" \
+            "ndk;27.2.12479018" "cmake;3.22.1"
 
       - name: Init submodules
         if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
