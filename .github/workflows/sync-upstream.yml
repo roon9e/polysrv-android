@@ -78,6 +78,7 @@ jobs:
           echo "our changes are in place"
 
       - name: Commit result
+        id: commit
         if: ${{ inputs.branch != '' }}
         run: |
           set -e
@@ -87,14 +88,16 @@ jobs:
           git add -A
           if git diff --cached --quiet; then
             echo "nothing to commit"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
               commit -m "chore: sync with upstream DrKLO/Telegram $(git rev-parse --short FETCH_HEAD)"
             git push --force-with-lease origin "${{ inputs.branch }}"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Open PR
-        if: ${{ inputs.open_pr && inputs.branch != '' }}
+        if: ${{ steps.commit.outputs.changed == 'true' && inputs.open_pr && inputs.branch != '' }}
         uses: peter-evans/create-pull-request@v6
         with:
           branch: ${{ inputs.branch }}
@@ -105,32 +108,32 @@ jobs:
           delete-branch: false
 
       - name: Set up JDK
-        if: ${{ inputs.build_apk }}
+        if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Android SDK
-        if: ${{ inputs.build_apk }}
+        if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
         uses: android-actions/setup-android@v3
 
       - name: Install SDK packages
-        if: ${{ inputs.build_apk }}
+        if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
         run: |
           yes | sdkmanager --licenses > /dev/null
           sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" \
                     "ndk;27.2.12479018" "cmake;3.22.1"
 
       - name: Init submodules
-        if: ${{ inputs.build_apk }}
+        if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
         working-directory: /tmp/upstream
         run: |
           git submodule update --init --recursive
           git submodule status | head -25
 
       - name: Build APK (arm64 only)
-        if: ${{ inputs.build_apk }}
+        if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
         working-directory: /tmp/upstream
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
@@ -140,7 +143,7 @@ jobs:
           ./gradlew :TMessagesProj_App:assembleAfatRelease -PabiFilters=arm64-v8a --stacktrace
 
       - name: Upload APK
-        if: ${{ inputs.build_apk }}
+        if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
         uses: actions/upload-artifact@v4
         with:
           name: PolySrv-apk-arm64
