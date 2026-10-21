@@ -28,6 +28,10 @@ on:
         description: 'Закоммитить результат в ветку (иначе только сборка, наш репозиторий не трогаем)'
         type: boolean
         default: true
+      fast_build:
+        description: 'Быстрая сборка: только arm64-v8a (в ~4 раза быстрее, APK без других архитектур)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -152,14 +156,18 @@ jobs:
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           chmod +x gradlew
-          # все архитектуры: armeabi-v7a, arm64-v8a, x86, x86_64
-          # (для быстрой проверки можно временно поставить -PabiFilters=arm64-v8a)
-          ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace
+          if [ "${{ inputs.fast_build }}" = "true" ]; then
+            echo "fast_build: собираем только arm64-v8a"
+            ./gradlew :TMessagesProj_App:assembleAfatRelease -PabiFilters=arm64-v8a --stacktrace
+          else
+            echo "полная сборка: armeabi-v7a, arm64-v8a, x86, x86_64"
+            ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace
+          fi
 
       - name: Upload APK
         if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
         uses: actions/upload-artifact@v4
         with:
-          name: PolySrv-apk
+          name: PolySrv-apk-${{ inputs.fast_build && 'arm64' || 'all' }}
           path: /tmp/upstream/TMessagesProj_App/build/outputs/apk/afat/release/*.apk
           if-no-files-found: error
