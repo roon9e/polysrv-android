@@ -1878,6 +1878,19 @@ void ConnectionsManager::initDatacenters() {
     }
 }
 
+void ConnectionsManager::applyDcTable(std::vector<std::string> hosts, std::vector<uint32_t> ports) {
+    scheduleTask([&, hosts, ports] {
+        dcTable.clear();
+        size_t count = std::min(hosts.size(), ports.size());
+        for (size_t i = 0; i < count; i++) {
+            if (!hosts[i].empty()) {
+                dcTable.emplace_back(hosts[i], ports[i]);
+            }
+        }
+        if (LOGS_ENABLED) DEBUG_D("dc table applied: %d entries", (int) dcTable.size());
+    });
+}
+
 void ConnectionsManager::applyServerConfig(std::string host, uint32_t port, bool isTelegram, uint32_t mainDcId, std::string pemKey, uint64_t fingerprint, bool resetKeys) {
     scheduleTask([&, host, port, isTelegram, mainDcId, pemKey, fingerprint, resetKeys] {
         // 1. Per-instance RSA-ключ. Сбрасываем thread_local кэш, чтобы следующий
@@ -1890,14 +1903,22 @@ void ConnectionsManager::applyServerConfig(std::string host, uint32_t port, bool
         Handshake::cleanupServerKeys();
 
         // 2. Таблица адресов DC 1..5 для выбранного сервера.
-        struct DcEntry { const char *ip; int port; };
-        static const DcEntry prod[5] = {
-            {"149.154.175.50", 443},
-            {"149.154.167.51", 443},
-            {"149.154.175.100", 443},
-            {"149.154.167.91", 443},
-            {"149.154.171.5", 443}
-        };
+        // Адреса DC: из конфига (CDN), иначе встроенные.
+        std::vector<std::pair<std::string, uint32_t>> prod;
+        if (!dcTable.empty()) {
+            prod = dcTable;
+        } else {
+            static const char *prodIps[5] = {
+                "149.154.175.50",
+                "149.154.167.51",
+                "149.154.175.100",
+                "149.154.167.91",
+                "149.154.171.5"
+            };
+            for (int i = 0; i < 5; i++) {
+                prod.emplace_back(prodIps[i], 443);
+            }
+        }
         if (isTelegram) {
             // Telegram multi-DC: ведём себя как стоковый Telegram. Все 5 DC должны
             // существовать и нести свой домашний адрес; используем ADD (не перезапись),
@@ -1917,16 +1938,17 @@ void ConnectionsManager::applyServerConfig(std::string host, uint32_t port, bool
                     dc = new Datacenter(instanceNum, dcId);
                     datacenters[dcId] = dc;
                 }
+                const std::pair<std::string, uint32_t> &entry = prod[(dcId - 1) % (int) prod.size()];
                 if (resetKeys && wasLocked) {
                     std::vector<TcpAddress> addrs;
-                    addrs.emplace_back(prod[dcId - 1].ip, prod[dcId - 1].port, 0, "");
+                    addrs.emplace_back(entry.first, entry.second, 0, "");
                     std::vector<TcpAddress> downloadAddrs;
-                    downloadAddrs.emplace_back(prod[dcId - 1].ip, prod[dcId - 1].port, TcpAddressFlagDownload, "");
+                    downloadAddrs.emplace_back(entry.first, entry.second, TcpAddressFlagDownload, "");
                     dc->replaceAddresses(addrs, 0);
                     dc->replaceAddresses(downloadAddrs, TcpAddressFlagDownload);
                 } else {
-                    dc->addAddressAndPort(prod[dcId - 1].ip, prod[dcId - 1].port, 0, "");
-                    dc->addAddressAndPort(prod[dcId - 1].ip, prod[dcId - 1].port, TcpAddressFlagDownload, "");
+                    dc->addAddressAndPort(entry.first, entry.second, 0, "");
+                    dc->addAddressAndPort(entry.first, entry.second, TcpAddressFlagDownload, "");
                 }
             }
             if (resetKeys) {

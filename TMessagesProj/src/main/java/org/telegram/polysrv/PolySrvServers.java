@@ -3,11 +3,17 @@ package org.telegram.polysrv;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 import android.text.TextUtils;
 
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.ConnectionsManager;
@@ -36,10 +42,148 @@ public class PolySrvServers {
         "-----END RSA PUBLIC KEY-----";
     static final long TELEGRAM_RSA_FINGERPRINT = 0xd09d1d85de64fd85L;
 
+    // --- Конфиг серверов (CDN) ---
+
+    private static final String KEY_CONFIG_CACHE = "servers_config_json";
+    private static final String KEY_CONFIG_TIME = "servers_config_time";
+    private static final List<PolySrvServer> configServers = new ArrayList<>();
+    private static boolean configLoaded;
+
+    /**
+     * Список серверов приходит не из кода, а из конфига: сначала берётся встроенный
+     * assets/servers.json (офлайн-фолбэк), потом обновляется с CDN (адрес — в
+     * servers.env -> BuildConfig.SERVERS_CONFIG_URL). Так адреса DC меняются без
+     * пересборки приложения.
+     */
+    public static synchronized void loadConfig() {
+        if (configLoaded) {
+            return;
+        }
+        configLoaded = true;
+
+        // 1) встроенный конфиг из assets
+        try {
+            InputStream is = ApplicationLoader.applicationContext.getAssets().open("servers.json");
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int len;
+            while ((len = is.read(buf)) > 0) {
+                bos.write(buf, 0, len);
+            }
+            is.close();
+            parseConfig(new String(bos.toByteArray()));
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+
+        // 2) кэш с CDN (с прошлого запуска)
+        try {
+            String cached = getPrefs().getString(KEY_CONFIG_CACHE, null);
+            if (!TextUtils.isEmpty(cached)) {
+                parseConfig(cached);
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+    }
+
+    /** Обновляет конфиг с CDN (в фоне). */
+    public static void refreshConfigFromNetwork(final Runnable onDone) {
+        final String url = BuildConfig.SERVERS_CONFIG_URL;
+        if (TextUtils.isEmpty(url)) {
+            if (onDone != null) onDone.run();
+            return;
+        }
+        new Thread(() -> {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                conn.setConnectTimeout(BuildConfig.SERVERS_CONFIG_TIMEOUT_MS);
+                conn.setReadTimeout(BuildConfig.SERVERS_CONFIG_TIMEOUT_MS);
+                conn.setRequestProperty("Cache-Control", "no-cache");
+                conn.connect();
+                if (conn.getResponseCode() == 200) {
+                    InputStream is = conn.getInputStream();
+                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[4096];
+                    int len;
+                    while ((len = is.read(buf)) > 0) {
+                        bos.write(buf, 0, len);
+                    }
+                    is.close();
+                    String json = new String(bos.toByteArray());
+                    if (parseConfig(json)) {
+                        getPrefs().edit()
+                                .putString(KEY_CONFIG_CACHE, json)
+                                .putLong(KEY_CONFIG_TIME, System.currentTimeMillis())
+                                .apply();
+                    }
+                }
+                conn.disconnect();
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+            if (onDone != null) {
+                onDone.run();
+            }
+        }, "polysrv-config").start();
+    }
+
+    /** Разбирает JSON конфига. Возвращает true, если удалось. */
+    private static synchronized boolean parseConfig(String json) {
+        try {
+            JSONObject root = new JSONObject(json);
+            JSONArray servers = root.optJSONArray("servers");
+            if (servers == null || servers.length() == 0) {
+                return false;
+            }
+            List<PolySrvServer> parsed = new ArrayList<>();
+            for (int i = 0; i < servers.length(); i++) {
+                JSONObject o = servers.getJSONObject(i);
+                PolySrvServer s = new PolySrvServer();
+                s.id = o.optString("id", "server" + i);
+                s.name = o.optString("name", s.id);
+                s.description = o.optString("description", "");
+                s.host = o.optString("host", "");
+                s.port = o.optInt("port", 443);
+                s.isTelegram = o.optBoolean("isTelegram", false);
+                s.multiDc = o.optBoolean("multiDc", s.isTelegram);
+                s.mainDcId = o.optInt("mainDcId", s.isTelegram ? 2 : 1);
+                s.rsaPublicKey = o.optString("rsaPublicKey", "");
+                s.rsaKeyFingerprint = o.optLong("rsaKeyFingerprint", 0);
+                s.isOfficial = true;
+                JSONArray dc = o.optJSONArray("dc");
+                if (dc != null) {
+                    for (int a = 0; a < dc.length(); a++) {
+                        s.dc.add(PolySrvServer.Dc.fromJson(dc.getJSONObject(a)));
+                    }
+                }
+                parsed.add(s);
+            }
+            configServers.clear();
+            configServers.addAll(parsed);
+            return true;
+        } catch (Exception e) {
+            FileLog.e(e);
+            return false;
+        }
+    }
+
+    /** Серверы из конфига (CDN/assets). */
+    public static synchronized List<PolySrvServer> getConfigServers() {
+        loadConfig();
+        return new ArrayList<>(configServers);
+    }
+
     // --- Built-in servers ---
 
-    /** Официальный Telegram (multi-DC). */
+    /** Официальный Telegram (multi-DC). Адреса DC и RSA-ключ — из конфига (CDN). */
     public static PolySrvServer telegramServer() {
+        loadConfig();
+        for (PolySrvServer s : configServers) {
+            if (ID_TELEGRAM.equals(s.id)) {
+                return s;
+            }
+        }
         PolySrvServer s = new PolySrvServer();
         s.id                 = ID_TELEGRAM;
         s.name               = "Telegram";
@@ -59,7 +203,10 @@ public class PolySrvServers {
 
     public static List<PolySrvServer> listServers() {
         List<PolySrvServer> result = new ArrayList<>();
-        result.add(telegramServer());
+        result.addAll(getConfigServers());
+        if (result.isEmpty()) {
+            result.add(telegramServer());
+        }
         result.addAll(loadCustomServers());
         return result;
     }
@@ -232,6 +379,19 @@ public class PolySrvServers {
         int mainDc = server.mainDcId > 0
                 ? server.mainDcId
                 : (server.isTelegram ? 2 : 1);
+        // Таблица адресов DC из конфига (CDN) — если сервер multi-DC.
+        if (!server.dc.isEmpty()) {
+            java.util.List<String> hosts = new ArrayList<>();
+            java.util.List<Integer> ports = new ArrayList<>();
+            for (PolySrvServer.Dc dc : server.dc) {
+                if (dc == null || TextUtils.isEmpty(dc.host)) continue;
+                hosts.add(dc.host);
+                ports.add(dc.port > 0 ? dc.port : 443);
+            }
+            if (!hosts.isEmpty()) {
+                ConnectionsManager.getInstance(accountNum).applyDcTable(hosts.toArray(new String[0]), ports.stream().mapToInt(Integer::intValue).toArray());
+            }
+        }
         ConnectionsManager.native_applyServerConfig(
                 accountNum,
                 server.host,

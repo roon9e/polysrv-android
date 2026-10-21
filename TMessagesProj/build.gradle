@@ -109,6 +109,37 @@ dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 }
 
+
+// Конфиг списка серверов (CDN). Значения берутся из servers.env в корне репозитория,
+// с фолбэком на gradle.properties. Меняешь одну строку — меняется адрес, откуда
+// клиент берёт список серверов (официальные DC и т.д.).
+def readServersEnv() {
+    def result = [:]
+    def envFile = rootProject.file('servers.env')
+    if (envFile.exists()) {
+        envFile.eachLine { line ->
+            def trimmed = line.trim()
+            if (trimmed && !trimmed.startsWith('#') && trimmed.contains('=')) {
+                def idx = trimmed.indexOf('=')
+                result[trimmed.substring(0, idx).trim()] = trimmed.substring(idx + 1).trim()
+            }
+        }
+    }
+    def propsFile = rootProject.file('gradle.properties')
+    if (propsFile.exists()) {
+        def props = new Properties()
+        propsFile.withInputStream { props.load(it) }
+        result.each { k, v -> if (!props.containsKey(k)) { } }
+        for (def key : result.keySet()) {
+            if (props.containsKey(key)) {
+                result[key] = props.getProperty(key)
+            }
+        }
+    }
+    return result
+}
+def serversEnv = readServersEnv()
+
 android {
     compileSdkVersion 36
     buildToolsVersion '36.0.0'
@@ -137,6 +168,10 @@ android {
     defaultConfig {
         minSdkVersion 23
         targetSdkVersion 36
+
+        buildConfigField "String", "SERVERS_CONFIG_URL", "\"" + (serversEnv['SERVERS_CONFIG_URL'] ?: "") + "\""
+        buildConfigField "int", "SERVERS_CONFIG_TIMEOUT_MS", (serversEnv['SERVERS_CONFIG_TIMEOUT_MS'] ?: "5000") + ""
+        buildConfigField "long", "SERVERS_CONFIG_CACHE_TTL_MS", (serversEnv['SERVERS_CONFIG_CACHE_TTL_MS'] ?: "3600000") + "L"
 
         vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
 

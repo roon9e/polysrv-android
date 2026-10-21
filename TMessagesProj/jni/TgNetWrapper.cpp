@@ -224,6 +224,36 @@ void applyDatacenterAddress(JNIEnv *env, jclass c, jint instanceNum, jint datace
     }
 }
 
+void applyDcTable(JNIEnv *env, jclass c, jint instanceNum, jobjectArray hosts, jintArray ports) {
+    std::vector<std::string> hostVec;
+    std::vector<uint32_t> portVec;
+    if (hosts != nullptr) {
+        jsize count = env->GetArrayLength(hosts);
+        for (jsize i = 0; i < count; i++) {
+            jstring item = (jstring) env->GetObjectArrayElement(hosts, i);
+            if (item == nullptr) {
+                hostVec.emplace_back("");
+                continue;
+            }
+            const char *str = env->GetStringUTFChars(item, 0);
+            hostVec.emplace_back(str != nullptr ? str : "");
+            if (str != nullptr) {
+                env->ReleaseStringUTFChars(item, str);
+            }
+            env->DeleteLocalRef(item);
+        }
+    }
+    if (ports != nullptr) {
+        jsize count = env->GetArrayLength(ports);
+        for (jsize i = 0; i < count; i++) {
+            jint value = 0;
+            env->GetIntArrayRegion(ports, i, 1, &value);
+            portVec.push_back((uint32_t) value);
+        }
+    }
+    ConnectionsManager::getInstance(instanceNum).applyDcTable(hostVec, portVec);
+}
+
 void applyServerConfig(JNIEnv *env, jclass c, jint instanceNum, jstring host, jint port, jboolean isTelegram, jint mainDcId, jstring pemKey, jlong fingerprint, jboolean resetKeys) {
     const char *hostStr = env->GetStringUTFChars(host, 0);
     const char *keyStr = env->GetStringUTFChars(pemKey, 0);
@@ -557,6 +587,7 @@ static JNINativeMethod ConnectionsManagerMethods[] = {
         {"native_bindRequestToGuid", "(III)V", (void *) bindRequestToGuid},
         {"native_applyDatacenterAddress", "(IILjava/lang/String;I)V", (void *) applyDatacenterAddress},
         {"native_applyServerConfig", "(ILjava/lang/String;IZILjava/lang/String;JZ)V", (void *) applyServerConfig},
+        {"native_applyDcTable", "([Ljava/lang/String;[I)V", (void *) applyDcTable},
         {"native_setProxySettings", "(ILjava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V", (void *) setProxySettings},
         {"native_getConnectionState", "(I)I", (void *) getConnectionState},
         {"native_setUserId", "(IJ)V", (void *) setUserId},

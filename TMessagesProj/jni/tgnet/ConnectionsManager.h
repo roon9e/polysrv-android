@@ -64,6 +64,9 @@ public:
     // Задаёт per-instance RSA-ключ, переключает домашний DC, при resetKeys сбрасывает auth keys
     // и переподключается. Выполняется в сетевом потоке.
     void applyServerConfig(std::string host, uint32_t port, bool isTelegram, uint32_t mainDcId, std::string pemKey, uint64_t fingerprint, bool resetKeys);
+    // Таблица адресов DC 1..N, пришедшая из конфига серверов (CDN).
+    // Пустая таблица = использовать встроенные адреса Telegram.
+    void applyDcTable(std::vector<std::string> hosts, std::vector<uint32_t> ports);
     void setDelegate(ConnectiosManagerDelegate *connectiosManagerDelegate);
     ConnectionState getConnectionState();
     void setUserId(int64_t userId);
@@ -158,6 +161,8 @@ private:
     // Для single-server бэкенда help.getConfig не должен перетирать зафиксированное
     // отображение DC 1..5 -> host:port (аналог DcOptions::optionsLocked в десктопе).
     bool serverOptionsLocked = false;
+    // Адреса DC из конфига (CDN): host/port для DC 1, 2, ...
+    std::vector<std::pair<std::string, uint32_t>> dcTable;
     bool clientBlocked = true;
     std::string lastInitSystemLangcode = "";
     std::atomic<uint32_t> lastRequestToken{50000000};

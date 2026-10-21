@@ -267,6 +267,8 @@ public class ApplicationLoader extends Application {
 
         ApplicationLoader app = (ApplicationLoader) ApplicationLoader.applicationContext;
         app.initPushServices();
+        // Обновляем список серверов/адреса DC с CDN (в фоне, не блокирует старт).
+        PolySrvServers.refreshConfigFromNetwork(null);
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("app initied");
         }
