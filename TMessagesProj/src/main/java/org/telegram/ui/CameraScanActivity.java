@@ -1377,7 +1377,7 @@ public class CameraScanActivity extends BaseFragment {
                 Uri uri = Uri.parse(text);
                 String path = uri.getPath().replace("/", "");
             } else {
-                if (currentType == TYPE_QR_LOGIN && !text.startsWith("tg://login?token=")) {
+                if (currentType == TYPE_QR_LOGIN && !text.startsWith("srv://login?token=")) {
                     onNoQrFound();
                     return null;
                 }

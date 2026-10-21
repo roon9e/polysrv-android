@@ -253,14 +253,14 @@ public final class ProxySettings {
                 } else {
                     return null;
                 }
-            } else if (scheme.equalsIgnoreCase("tg")) {
+            } else if (scheme.equalsIgnoreCase("tg") || scheme.equalsIgnoreCase("srv")) {
                 String url = uri.toString();
 
-                if (url.startsWith("tg://socks") || url.startsWith("tg:socks")) {
+                if (url.startsWith("srv://socks") || url.startsWith("srv:socks")) {
                     type = Type.SOCKS5;
-                } else if (url.startsWith("tg://proxy") || url.startsWith("tg:proxy")) {
+                } else if (url.startsWith("srv://proxy") || url.startsWith("srv:proxy")) {
                     type = Type.MTPROTO;
-                } else if (url.startsWith("tg://webproxy") || url.startsWith("tg:webproxy")) {
+                } else if (url.startsWith("srv://webproxy") || url.startsWith("srv:webproxy")) {
                     type = Type.WEB;
                 } else {
                     return null;
@@ -271,7 +271,7 @@ public final class ProxySettings {
                     return null;
                 }
 
-                uri = Uri.parse("tg://telegram.org/" + url.substring(queryIndex));
+                uri = Uri.parse("srv://telegram.org/" + url.substring(queryIndex));
             } else {
                 return null;
             }

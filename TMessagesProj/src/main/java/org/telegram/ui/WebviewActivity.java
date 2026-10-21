@@ -241,10 +241,10 @@ public class WebviewActivity extends BaseFragment {
                     return false;
                 }
                 Uri uri = Uri.parse(url);
-                if ("tg".equals(uri.getScheme())) {
+                if ("tg".equals(uri.getScheme()) || "srv".equals(uri.getScheme())) {
                     if (type == TYPE_STAT) {
                         try {
-                            uri = Uri.parse(url.replace("tg:statsrefresh", "tg://telegram.org"));
+                            uri = Uri.parse(url.replace("srv:statsrefresh", "srv://telegram.org"));
                             reloadStats(uri.getQueryParameter("params"));
                         } catch (Throwable e) {
                             FileLog.e(e);

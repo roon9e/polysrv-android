@@ -389,7 +389,7 @@ public class NotificationsController extends BaseController implements Notificat
                         : LocaleController.formatString(R.string.NotificationWalletTonConnectRequestDapp, dapp);
                 Intent intent = new Intent(ApplicationLoader.applicationContext, LaunchActivity.class);
                 intent.setAction(Intent.ACTION_VIEW);
-                intent.setData(Uri.parse("tg://resolve?domain=sendgrams"));
+                intent.setData(Uri.parse("srv://resolve?domain=sendgrams"));
                 intent.putExtra("currentAccount", currentAccount);
                 intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 PendingIntent contentIntent = PendingIntent.getActivity(ApplicationLoader.applicationContext,

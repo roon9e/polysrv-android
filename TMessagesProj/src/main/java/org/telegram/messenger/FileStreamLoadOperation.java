@@ -306,7 +306,7 @@ public class FileStreamLoadOperation implements DataSource, FileLoadOperationStr
                 "&rid=" + FileLoader.getInstance(currentAccount).getFileReference(parent) +
                 "&name=" + URLEncoder.encode(FileLoader.getDocumentFileName(document), "UTF-8") +
                 "&reference=" + Utilities.bytesToHex(document.file_reference != null ? document.file_reference : new byte[0]);
-            return Uri.parse("tg://" + attachFileName + params);
+            return Uri.parse("srv://" + attachFileName + params);
         } catch (UnsupportedEncodingException e) {
             FileLog.e(e);
         }

@@ -172,8 +172,9 @@ public class PaymentFormActivity extends BaseFragment implements NotificationCen
             "http",
             "https"
     );
-    private final static List<String> BLACKLISTED_PROTOCOLS = Collections.singletonList(
-            "tg"
+    private final static List<String> BLACKLISTED_PROTOCOLS = Arrays.asList(
+            "tg",
+            "srv"
     );
 
     private final static int STEP_SHIPPING_INFORMATION = 0,

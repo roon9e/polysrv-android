@@ -644,7 +644,7 @@ public class Browser {
         }
         try {
             url = url.toLowerCase();
-            if (url.startsWith("tg:passport") || url.startsWith("tg://passport") || url.startsWith("tg:secureid") || url.contains("resolve") && url.contains("domain=telegrampassport")) {
+            if (url.startsWith("srv:passport") || url.startsWith("srv://passport") || url.startsWith("srv:secureid") || url.contains("resolve") && url.contains("domain=telegrampassport")) {
                 return true;
             }
         } catch (Throwable ignore) {
@@ -697,7 +697,7 @@ public class Browser {
 
             }
             return true;
-        } else if ("tg".equals(uri.getScheme())) {
+        } else if ("tg".equals(uri.getScheme()) || "srv".equals(uri.getScheme())) {
             return true;
         } else if ("telegram.dog".equals(host)) {
             String path = uri.getPath();

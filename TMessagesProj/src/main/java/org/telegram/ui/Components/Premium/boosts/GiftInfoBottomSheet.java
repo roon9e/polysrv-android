@@ -95,10 +95,10 @@ public class GiftInfoBottomSheet extends BottomSheetWithRecyclerListView {
                             }
                         }
                     }
-                } else if (scheme.equals("tg")) {
+                } else if (scheme.equals("tg") || scheme.equals("srv")) {
                     String url = data.toString();
                     String lastPathSegment = data.getLastPathSegment();
-                    if (url.startsWith("tg:giftcode") || url.startsWith("tg://giftcode")) {
+                    if (url.startsWith("srv:giftcode") || url.startsWith("srv://giftcode")) {
                         if (lastPathSegment != null) {
                             show(LaunchActivity.getLastFragment(), lastPathSegment, progress);
                             return true;

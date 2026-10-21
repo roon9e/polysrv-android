@@ -4421,7 +4421,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                     confirmTextView.setMovementMethod(new AndroidUtilities.LinkMovementMethodMy());
                     spanned.replace(lastIndex, lastIndex + 1, "");
                     spanned.replace(startIndex, startIndex + 1, "");
-                    spanned.setSpan(new URLSpanNoUnderline("tg://settings/change_number"), startIndex, lastIndex - 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    spanned.setSpan(new URLSpanNoUnderline("srv://settings/change_number"), startIndex, lastIndex - 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 }
                 str = spanned;
             } else {
