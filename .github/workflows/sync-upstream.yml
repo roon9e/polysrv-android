@@ -24,10 +24,16 @@ on:
         description: 'Открыть/обновить PR с результатом'
         type: boolean
         default: true
+      commit_result:
+        description: 'Закоммитить результат в ветку (иначе только сборка, наш репозиторий не трогаем)'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
   pull-requests: write
+  # без этого push ветки, содержащей .github/workflows/*, отклоняется GitHub'ом
+  workflows: write
 
 concurrency:
   group: sync-upstream
@@ -82,7 +88,7 @@ jobs:
 
       - name: Commit result
         id: commit
-        if: ${{ inputs.branch != '' }}
+        if: ${{ inputs.commit_result != false && inputs.branch != '' }}
         run: |
           set -e
           cd /tmp/upstream
@@ -100,7 +106,7 @@ jobs:
           fi
 
       - name: Open PR
-        if: ${{ steps.commit.outputs.changed == 'true' && inputs.open_pr && inputs.branch != '' }}
+        if: ${{ steps.commit.outputs.changed == 'true' && inputs.open_pr && inputs.commit_result != false && inputs.branch != '' }}
         uses: peter-evans/create-pull-request@v6
         with:
           branch: ${{ inputs.branch }}
