@@ -53,6 +53,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check that polysrv_edits.json is up to date
+        run: |
+          # список правок должен соответствовать текущему состоянию нашего кода,
+          # иначе в CI соберётся устаревшая версия (как сломанный abiFilters)
+          python3 scripts/generate_polysrv_edits.py
+          if ! git diff --quiet -- scripts/polysrv_edits.json; then
+            echo "scripts/polysrv_edits.json устарел — перегенерируй и закоммить:"
+            git --no-pager diff --stat -- scripts/polysrv_edits.json
+            git checkout -- scripts/polysrv_edits.json
+            exit 1
+          fi
+          echo "polysrv_edits.json актуален"
+
       - name: Fetch upstream
         run: |
           git remote add upstream https://github.com/DrKLO/Telegram.git 2>/dev/null || \
