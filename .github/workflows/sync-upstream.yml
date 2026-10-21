@@ -6,6 +6,9 @@ name: Sync upstream
 #
 # Запуск: вкладка Actions -> Sync upstream -> Run workflow.
 # Или автоматически каждые 6 часов.
+#
+# Сборка идёт в матрице: каждый ABI собирается в своём job'е (параллельно),
+# затем финальный job склеивает 4 single-ABI APK в один universal.
 
 on:
   schedule:
@@ -41,11 +44,20 @@ concurrency:
   group: sync-upstream
   cancel-in-progress: false
 
+env:
+  ABI_LIST: armeabi-v7a arm64-v8a x86 x86_64
+
 jobs:
   sync:
     name: Sync with DrKLO/Telegram
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 120
+    outputs:
+      build: ${{ steps.opts.outputs.build_apk }}
+      fast: ${{ steps.opts.outputs.fast_build }}
+      branch: ${{ steps.opts.outputs.branch }}
+      commit_result: ${{ steps.opts.outputs.commit_result }}
+      open_pr: ${{ steps.opts.outputs.open_pr }}
 
     steps:
       - name: Checkout our repo
@@ -150,34 +162,68 @@ jobs:
             (`scripts/polysrv_edits.json`). Проверяй, что ничего не сломалось.
           delete-branch: false
 
-      - name: Set up JDK
+      - name: Pack patched source
         if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
+        run: |
+          set -e
+          tar --exclude=.git --exclude=build --exclude=.cxx -czf /tmp/upstream-src.tar.gz -C /tmp upstream
+          ls -lh /tmp/upstream-src.tar.gz
+
+      - name: Upload patched source
+        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-src
+          path: /tmp/upstream-src.tar.gz
+          retention-days: 1
+
+  build:
+    name: Build ${{ matrix.abi }}
+    needs: sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [armeabi-v7a, arm64-v8a, x86, x86_64]
+    steps:
+      - name: Checkout our repo
+        uses: actions/checkout@v4
+
+      - name: Download patched source
+        uses: actions/download-artifact@v4
+        with:
+          name: upstream-src
+          path: /tmp/src
+
+      - name: Unpack source
+        run: |
+          set -e
+          mkdir -p /tmp/work
+          tar -xzf /tmp/src/upstream-src.tar.gz -C /tmp/work
+          mv /tmp/work/upstream /tmp/upstream
+          ls /tmp/upstream | head
+
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Android SDK
-        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
         run: |
           set -e
-          # На раннерах GitHub SDK уже есть (/usr/local/lib/android/sdk) вместе с cmdline-tools.
-          # Экшен android-actions/setup-android@v3 не используем: он пытается поставить
-          # устаревший пакет "tools" и валит воркфлоу ("Failed to find package 'tools'").
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          # ищем sdkmanager: версия cmdline-tools на раннере может быть любой (16.0, latest, ...)
           SDKMANAGER_BIN="$(dirname "$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f 2>/dev/null | head -1)")"
           if [ -z "$SDKMANAGER_BIN" ]; then
             echo "sdkmanager не найден в $ANDROID_HOME/cmdline-tools"; ls -R "$ANDROID_HOME/cmdline-tools" | head -20; exit 1
           fi
-          # GITHUB_PATH действует только в следующих шагах, поэтому экспортируем и сразу
           export PATH="$SDKMANAGER_BIN:$ANDROID_HOME/platform-tools:$PATH"
           echo "$SDKMANAGER_BIN" >> $GITHUB_PATH
           echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
           sdkmanager --version
 
       - name: Install SDK packages
-        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
         run: |
           set -e
           yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null
@@ -186,32 +232,68 @@ jobs:
             "ndk;27.2.12479018" "cmake;3.22.1"
 
       - name: Init submodules
-        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
         working-directory: /tmp/upstream
-        run: |
-          git submodule update --init --recursive
-          git submodule status | head -25
+        run: git submodule update --init --recursive
 
-      - name: Build APK (all architectures)
-        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
+      - name: Build APK (${{ matrix.abi }})
         working-directory: /tmp/upstream
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
         run: |
+          set -e
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           chmod +x gradlew
-          if [ "${{ steps.opts.outputs.fast_build }}" = "true" ]; then
-            echo "fast_build: собираем только arm64-v8a"
-            ./gradlew :TMessagesProj_App:assembleAfatRelease -PabiFilters=arm64-v8a --stacktrace
-          else
-            echo "полная сборка: armeabi-v7a, arm64-v8a, x86, x86_64"
-            ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace
-          fi
+          ./gradlew :TMessagesProj_App:assembleAfatRelease -PabiFilters=${{ matrix.abi }} --stacktrace
 
-      - name: Upload APK
-        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
+      - name: Upload APK ${{ matrix.abi }}
         uses: actions/upload-artifact@v4
         with:
-          name: PolySrv-apk-${{ steps.opts.outputs.fast_build == 'true' && 'arm64' || 'all' }}
+          name: apk-${{ matrix.abi }}
           path: /tmp/upstream/TMessagesProj_App/build/outputs/apk/afat/release/*.apk
           if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: Package universal APK
+    needs: [sync, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout our repo
+        uses: actions/checkout@v4
+
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: apk-*
+          path: /tmp/apks
+          merge-multiple: true
+
+      - name: List downloaded APKs
+        run: ls -lh /tmp/apks
+
+      - name: Merge into universal APK
+        run: |
+          set -e
+          ARGS=""
+          for f in /tmp/apks/*.apk; do
+            base="$(basename "$f")"
+            abi="$(echo "$base" | sed -n 's/^apk-\(.*\)\.apk$/\1/p')"
+            if [ -z "$abi" ]; then abi="$(basename "$f" .apk)"; fi
+            echo "  $abi <- $f"
+            ARGS="$ARGS $abi=$f"
+          done
+          # параметры подписи берём из gradle.properties нашего репо
+          KS_PASS=$(grep -E '^RELEASE_STORE_PASSWORD=' gradle.properties | cut -d= -f2)
+          KEY_PASS=$(grep -E '^RELEASE_KEY_PASSWORD=' gradle.properties | cut -d= -f2)
+          ALIAS=$(grep -E '^RELEASE_KEY_ALIAS=' gradle.properties | cut -d= -f2)
+          python3 scripts/merge_universal_apk.py --apks $ARGS \
+            --keystore TMessagesProj/config/release.keystore --alias "$ALIAS" \
+            --ks-pass "$KS_PASS" --key-pass "$KEY_PASS" --out /tmp/app-universal.apk
+          ls -lh /tmp/app-universal.apk
+
+      - name: Upload universal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PolySrv-apk-universal
+          path: /tmp/app-universal.apk
+          if-no-files-found: error
+          retention-days: 14
