@@ -32,8 +32,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  # без этого push ветки, содержащей .github/workflows/*, отклоняется GitHub'ом
-  workflows: write
 
 concurrency:
   group: sync-upstream
@@ -94,6 +92,11 @@ jobs:
           cd /tmp/upstream
           # worktree — часть нашего репозитория, коммит уходит прямо в него
           git checkout -B "${{ inputs.branch }}"
+          # .github (workflow-файлы) в ветку синхронизации не кладём:
+          # дефолтный GITHUB_TOKEN не имеет права менять workflow-файлы,
+          # и такой push отклоняется GitHub'ом.
+          git rm -r -q --cached .github 2>/dev/null || true
+          rm -rf .github
           git add -A
           if git diff --cached --quiet; then
             echo "nothing to commit"
