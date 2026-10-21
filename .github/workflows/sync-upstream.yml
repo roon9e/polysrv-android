@@ -143,6 +143,8 @@ jobs:
           if [ -z "$SDKMANAGER_BIN" ]; then
             echo "sdkmanager не найден в $ANDROID_HOME/cmdline-tools"; ls -R "$ANDROID_HOME/cmdline-tools" | head -20; exit 1
           fi
+          # GITHUB_PATH действует только в следующих шагах, поэтому экспортируем и сразу
+          export PATH="$SDKMANAGER_BIN:$ANDROID_HOME/platform-tools:$PATH"
           echo "$SDKMANAGER_BIN" >> $GITHUB_PATH
           echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
           sdkmanager --version
