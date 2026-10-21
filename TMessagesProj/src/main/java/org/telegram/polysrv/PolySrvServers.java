@@ -87,40 +87,51 @@ public class PolySrvServers {
         }
     }
 
-    /** Обновляет конфиг с CDN (в фоне). */
+    /** Обновляет конфиг с CDN (в фоне). Пробует основной URL, затем запасной. */
     public static void refreshConfigFromNetwork(final Runnable onDone) {
-        final String url = BuildConfig.SERVERS_CONFIG_URL;
-        if (TextUtils.isEmpty(url)) {
+        final java.util.List<String> urls = new ArrayList<>();
+        if (!TextUtils.isEmpty(BuildConfig.SERVERS_CONFIG_URL)) {
+            urls.add(BuildConfig.SERVERS_CONFIG_URL);
+        }
+        if (!TextUtils.isEmpty(BuildConfig.SERVERS_CONFIG_URL_FALLBACK)) {
+            urls.add(BuildConfig.SERVERS_CONFIG_URL_FALLBACK);
+        }
+        if (urls.isEmpty()) {
             if (onDone != null) onDone.run();
             return;
         }
         new Thread(() -> {
-            try {
-                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-                conn.setConnectTimeout(BuildConfig.SERVERS_CONFIG_TIMEOUT_MS);
-                conn.setReadTimeout(BuildConfig.SERVERS_CONFIG_TIMEOUT_MS);
-                conn.setRequestProperty("Cache-Control", "no-cache");
-                conn.connect();
-                if (conn.getResponseCode() == 200) {
-                    InputStream is = conn.getInputStream();
-                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                    byte[] buf = new byte[4096];
-                    int len;
-                    while ((len = is.read(buf)) > 0) {
-                        bos.write(buf, 0, len);
+            for (String url : urls) {
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                    conn.setConnectTimeout(BuildConfig.SERVERS_CONFIG_TIMEOUT_MS);
+                    conn.setReadTimeout(BuildConfig.SERVERS_CONFIG_TIMEOUT_MS);
+                    conn.setRequestProperty("Cache-Control", "no-cache");
+                    conn.setRequestProperty("Pragma", "no-cache");
+                    conn.connect();
+                    if (conn.getResponseCode() == 200) {
+                        InputStream is = conn.getInputStream();
+                        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                        byte[] buf = new byte[4096];
+                        int len;
+                        while ((len = is.read(buf)) > 0) {
+                            bos.write(buf, 0, len);
+                        }
+                        is.close();
+                        String text = new String(bos.toByteArray());
+                        if (parseConfig(text)) {
+                            getPrefs().edit()
+                                    .putString(KEY_CONFIG_CACHE, text)
+                                    .putLong(KEY_CONFIG_TIME, System.currentTimeMillis())
+                                    .apply();
+                            conn.disconnect();
+                            break;
+                        }
                     }
-                    is.close();
-                    String json = new String(bos.toByteArray());
-                    if (parseConfig(json)) {
-                        getPrefs().edit()
-                                .putString(KEY_CONFIG_CACHE, json)
-                                .putLong(KEY_CONFIG_TIME, System.currentTimeMillis())
-                                .apply();
-                    }
+                    conn.disconnect();
+                } catch (Exception e) {
+                    FileLog.e(e);
                 }
-                conn.disconnect();
-            } catch (Exception e) {
-                FileLog.e(e);
             }
             if (onDone != null) {
                 onDone.run();
