@@ -53,6 +53,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Resolve options
+        id: opts
+        run: |
+          # На событии schedule входы inputs.* пустые, поэтому считаем флаги явно:
+          # "false" -> выключено, иначе включено.
+          {
+            echo "build_apk=$([ "${{ inputs.build_apk }}" = "false" ] && echo false || echo true)"
+            echo "commit_result=$([ "${{ inputs.commit_result }}" = "false" ] && echo false || echo true)"
+            echo "open_pr=$([ "${{ inputs.open_pr }}" = "false" ] && echo false || echo true)"
+            echo "fast_build=$([ "${{ inputs.fast_build }}" = "true" ] && echo true || echo false)"
+            echo "branch=${{ inputs.branch || 'upstream-sync' }}"
+          } >> $GITHUB_OUTPUT
+          echo "build_apk=${{ steps.opts.outputs.build_apk }} commit_result=${{ steps.opts.outputs.commit_result }} open_pr=${{ steps.opts.outputs.open_pr }} fast_build=${{ steps.opts.outputs.fast_build }} branch=${{ steps.opts.outputs.branch }}"
+
       - name: Check that polysrv_edits.json is up to date
         run: |
           # список правок должен соответствовать текущему состоянию нашего кода,
@@ -103,12 +117,12 @@ jobs:
 
       - name: Commit result
         id: commit
-        if: ${{ inputs.commit_result != false && inputs.branch != '' }}
+        if: ${{ steps.opts.outputs.commit_result == 'true' && steps.opts.outputs.branch != '' }}
         run: |
           set -e
           cd /tmp/upstream
           # worktree — часть нашего репозитория, коммит уходит прямо в него
-          git checkout -B "${{ inputs.branch }}"
+          git checkout -B "${{ steps.opts.outputs.branch }}"
           # .github (workflow-файлы) в ветку синхронизации не кладём:
           # дефолтный GITHUB_TOKEN не имеет права менять workflow-файлы,
           # и такой push отклоняется GitHub'ом.
@@ -121,15 +135,15 @@ jobs:
           else
             git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
               commit -m "chore: sync with upstream DrKLO/Telegram $(git rev-parse --short FETCH_HEAD)"
-            git push --force-with-lease origin "${{ inputs.branch }}"
+            git push --force-with-lease origin "${{ steps.opts.outputs.branch }}"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Open PR
-        if: ${{ steps.commit.outputs.changed == 'true' && inputs.open_pr && inputs.commit_result != false && inputs.branch != '' }}
+        if: ${{ steps.commit.outputs.changed == 'true' && steps.opts.outputs.open_pr == 'true' && steps.opts.outputs.commit_result == 'true' && steps.opts.outputs.branch != '' }}
         uses: peter-evans/create-pull-request@v6
         with:
-          branch: ${{ inputs.branch }}
+          branch: ${{ steps.opts.outputs.branch }}
           title: 'Sync with upstream DrKLO/Telegram'
           body: |
             Автосинхронизация с апстримом. Наши правки наложены заново
@@ -137,14 +151,14 @@ jobs:
           delete-branch: false
 
       - name: Set up JDK
-        if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
+        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Android SDK
-        if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
+        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
         run: |
           set -e
           # На раннерах GitHub SDK уже есть (/usr/local/lib/android/sdk) вместе с cmdline-tools.
@@ -163,7 +177,7 @@ jobs:
           sdkmanager --version
 
       - name: Install SDK packages
-        if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
+        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
         run: |
           set -e
           yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null
@@ -172,21 +186,21 @@ jobs:
             "ndk;27.2.12479018" "cmake;3.22.1"
 
       - name: Init submodules
-        if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
+        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
         working-directory: /tmp/upstream
         run: |
           git submodule update --init --recursive
           git submodule status | head -25
 
       - name: Build APK (all architectures)
-        if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
+        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
         working-directory: /tmp/upstream
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           chmod +x gradlew
-          if [ "${{ inputs.fast_build }}" = "true" ]; then
+          if [ "${{ steps.opts.outputs.fast_build }}" = "true" ]; then
             echo "fast_build: собираем только arm64-v8a"
             ./gradlew :TMessagesProj_App:assembleAfatRelease -PabiFilters=arm64-v8a --stacktrace
           else
@@ -195,9 +209,9 @@ jobs:
           fi
 
       - name: Upload APK
-        if: ${{ inputs.build_apk && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') }}
+        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
         uses: actions/upload-artifact@v4
         with:
-          name: PolySrv-apk-${{ inputs.fast_build && 'arm64' || 'all' }}
+          name: PolySrv-apk-${{ steps.opts.outputs.fast_build == 'true' && 'arm64' || 'all' }}
           path: /tmp/upstream/TMessagesProj_App/build/outputs/apk/afat/release/*.apk
           if-no-files-found: error
