@@ -128,9 +128,43 @@ public class PolySrvServers {
         }, "polysrv-config").start();
     }
 
-    /** Разбирает JSON конфига. Возвращает true, если удалось. */
-    private static synchronized boolean parseConfig(String json) {
+    /**
+     * Достаёт JSON конфига из ответа: либо файл сам является JSON, либо это .env
+     * с переменной SERVERS_JSON=... (значение может быть в кавычках).
+     */
+    private static String extractConfigJson(String text) {
+        if (text == null) {
+            return null;
+        }
+        String trimmed = text.trim();
+        if (trimmed.startsWith("{")) {
+            return trimmed;
+        }
+        for (String line : text.split("\\r?\\n")) {
+            String l = line.trim();
+            if (l.startsWith("SERVERS_JSON=")) {
+                String value = l.substring("SERVERS_JSON=".length()).trim();
+                if (value.length() > 1 && value.startsWith("\"") && value.endsWith("\"")) {
+                    value = value.substring(1, value.length() - 1);
+                }
+                value = value.replace("\\\"", "\"");
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Разбирает конфиг. Поддерживаются два формата:
+     *  - обычный JSON (начинается с "{");
+     *  - .env-файл, где список серверов лежит в переменной SERVERS_JSON.
+     */
+    private static synchronized boolean parseConfig(String text) {
         try {
+            String json = extractConfigJson(text);
+            if (json == null) {
+                return false;
+            }
             JSONObject root = new JSONObject(json);
             JSONArray servers = root.optJSONArray("servers");
             if (servers == null || servers.length() == 0) {
