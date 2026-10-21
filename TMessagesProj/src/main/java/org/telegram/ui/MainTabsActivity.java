@@ -611,6 +611,11 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             }
         }
         Collections.sort(accountNumbers, (o1, o2) -> {
+            // Сначала группируем по серверу, потом по времени входа внутри сервера.
+            int c = serverLabel(o1).compareToIgnoreCase(serverLabel(o2));
+            if (c != 0) {
+                return c;
+            }
             long l1 = UserConfig.getInstance(o1).loginTime;
             long l2 = UserConfig.getInstance(o2).loginTime;
             if (l1 > l2) {
@@ -638,7 +643,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
                     freeAccounts -= (UserConfig.MAX_ACCOUNT_COUNT - UserConfig.MAX_ACCOUNT_DEFAULT_COUNT);
                 }
                 if (freeAccounts > 0 && availableAccount != null) {
-                    presentFragment(new LoginActivity(availableAccount));
+                    // Любой аккаунт (в т.ч. на кастомном сервере) может занять любой свободный слот.
+                    presentFragment(new ServerSelectFragment(availableAccount));
                 } else if (!UserConfig.hasPremiumOnAccounts()) {
                     showDialog(new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null));
                 }
@@ -651,8 +657,17 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
         if (accountNumbers.size() > 0) {
             if (o.getItemsCount() > 0) o.addGap();
+            String lastServer = null;
             for (int acc : accountNumbers) {
                 final int account = acc;
+                final String serverName = serverLabel(acc);
+                if (!serverName.equals(lastServer)) {
+                    if (lastServer != null) {
+                        o.addGap(); // разделитель между группами серверов
+                    }
+                    o.addView(serverHeaderView(serverName), LayoutHelper.createLinear(230, LayoutHelper.WRAP_CONTENT));
+                    lastServer = serverName;
+                }
                 final View btn = accountView(acc, currentAccount == acc);
                 btn.setOnClickListener(v -> {
                     if (currentAccount == account) return;
@@ -675,6 +690,22 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         HintsController.Hint.AccountSwitchHint.doNotShowAgain();
 
         return true;
+    }
+
+    private String serverLabel(int account) {
+        String name = org.telegram.polysrv.PolySrvServers.serverNameForAccount(account);
+        return name != null ? name : getString(R.string.AppName);
+    }
+
+    private android.widget.TextView serverHeaderView(String title) {
+        android.widget.TextView tv = new android.widget.TextView(getContext());
+        tv.setText(title);
+        tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 12);
+        tv.setTypeface(AndroidUtilities.bold());
+        tv.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlueHeader));
+        tv.setPadding(dp(16), dp(8), dp(16), dp(4));
+        tv.setAllCaps(true);
+        return tv;
     }
 
     public LinearLayout accountView(int account, boolean selected) {

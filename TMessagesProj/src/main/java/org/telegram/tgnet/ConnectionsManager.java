@@ -621,6 +621,15 @@ public class ConnectionsManager extends BaseController {
         native_applyDatacenterAddress(currentAccount, datacenterId, ipAddress, port);
     }
 
+    /**
+     * Применяет выбранный сервер к текущему аккаунту (native).
+     * isTelegram=true — официальный Telegram (multi-DC), false — single-server бэкенд.
+     * fingerprint=0 -> нативный слой посчитает его из PEM.
+     */
+    public void applyServerConfig(String host, int port, boolean isTelegram, int mainDcId, String pemKey, long fingerprint, boolean resetKeys) {
+        native_applyServerConfig(currentAccount, host, port, isTelegram, mainDcId, pemKey, fingerprint, resetKeys);
+    }
+
     public int getConnectionState() {
         if (connectionState == ConnectionStateConnected && isUpdating) {
             return ConnectionStateUpdating;
@@ -1018,6 +1027,7 @@ public class ConnectionsManager extends BaseController {
     public static native void native_cancelRequestsForGuid(int currentAccount, int guid);
     public static native void native_bindRequestToGuid(int currentAccount, int requestToken, int guid);
     public static native void native_applyDatacenterAddress(int currentAccount, int datacenterId, String ipAddress, int port);
+    public static native void native_applyServerConfig(int currentAccount, String host, int port, boolean isTelegram, int mainDcId, String pemKey, long fingerprint, boolean resetKeys);
     public static native int native_getConnectionState(int currentAccount);
     public static native void native_setUserId(int currentAccount, long id);
     public static native void native_init(int currentAccount, int version, int layer, int apiId, String deviceModel, String systemVersion, String appVersion, String langCode, String systemLangCode, String configPath, String logPath, String regId, String cFingerprint, String installer, String packageId, int timezoneOffset, long userId, boolean userPremium, boolean enablePushConnection, boolean hasNetwork, int networkType, int performanceClass);

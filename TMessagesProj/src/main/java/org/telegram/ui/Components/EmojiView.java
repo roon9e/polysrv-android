@@ -2835,7 +2835,7 @@ public class EmojiView extends FrameLayout implements
         });
         currentPage = MessagesController.getGlobalEmojiSettings().getInt("selected_page", 0);
 
-        Emoji.loadRecentEmoji();
+        Emoji.loadRecentEmoji(currentAccount);
         emojiAdapter.notifyDataSetChanged();
 
         setAllow(needStickers, needGif, false);

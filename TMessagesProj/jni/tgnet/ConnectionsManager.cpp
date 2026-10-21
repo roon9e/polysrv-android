@@ -1878,6 +1878,121 @@ void ConnectionsManager::initDatacenters() {
     }
 }
 
+void ConnectionsManager::applyServerConfig(std::string host, uint32_t port, bool isTelegram, uint32_t mainDcId, std::string pemKey, uint64_t fingerprint, bool resetKeys) {
+    scheduleTask([&, host, port, isTelegram, mainDcId, pemKey, fingerprint, resetKeys] {
+        // 1. Per-instance RSA-ключ. Сбрасываем thread_local кэш, чтобы следующий
+        //    handshake перечитал ключ (serverPublicKeys общий для всех аккаунтов).
+        //    fingerprint == 0 -> вычислить из PEM (как в десктоп-клиенте).
+        customPublicKey = pemKey;
+        customPublicKeyFingerprint = (fingerprint != 0)
+                ? fingerprint
+                : Handshake::calculatePublicKeyFingerprint(pemKey);
+        Handshake::cleanupServerKeys();
+
+        // 2. Таблица адресов DC 1..5 для выбранного сервера.
+        struct DcEntry { const char *ip; int port; };
+        static const DcEntry prod[5] = {
+            {"149.154.175.50", 443},
+            {"149.154.167.51", 443},
+            {"149.154.175.100", 443},
+            {"149.154.167.91", 443},
+            {"149.154.171.5", 443}
+        };
+        if (isTelegram) {
+            // Telegram multi-DC: ведём себя как стоковый Telegram. Все 5 DC должны
+            // существовать и нести свой домашний адрес; используем ADD (не перезапись),
+            // чтобы адреса, полученные от help.getConfig, сохранялись — иначе не грузились
+            // бы медиа/стикеры/реакции с DC3/4/5. Заполняем И обычный, И download/media адрес.
+            //
+            // Исключение: если аккаунт раньше сидел на single-server (locked) — все dc_id 1..5
+            // были принудительно перемаплены на чужой хост через replaceAddresses. Тогда ADD
+            // оставил бы «отравленные» записи, и DC1/3/4/5 продолжали бы резолвиться на старый
+            // сервер (реальная причина бага «не могу залогиниться в Telegram после кастомного
+            // сервера»). Поэтому при wasLocked используем REPLACE-семантику.
+            bool wasLocked = serverOptionsLocked;
+            serverOptionsLocked = false;
+            for (int dcId = 1; dcId <= 5; dcId++) {
+                Datacenter *dc = getDatacenterWithId(dcId);
+                if (dc == nullptr) {
+                    dc = new Datacenter(instanceNum, dcId);
+                    datacenters[dcId] = dc;
+                }
+                if (resetKeys && wasLocked) {
+                    std::vector<TcpAddress> addrs;
+                    addrs.emplace_back(prod[dcId - 1].ip, prod[dcId - 1].port, 0, "");
+                    std::vector<TcpAddress> downloadAddrs;
+                    downloadAddrs.emplace_back(prod[dcId - 1].ip, prod[dcId - 1].port, TcpAddressFlagDownload, "");
+                    dc->replaceAddresses(addrs, 0);
+                    dc->replaceAddresses(downloadAddrs, TcpAddressFlagDownload);
+                } else {
+                    dc->addAddressAndPort(prod[dcId - 1].ip, prod[dcId - 1].port, 0, "");
+                    dc->addAddressAndPort(prod[dcId - 1].ip, prod[dcId - 1].port, TcpAddressFlagDownload, "");
+                }
+            }
+            if (resetKeys) {
+                // Свежий переход на Telegram: сбрасываем ключи/сессии, домашний DC = mainDcId.
+                for (int dcId = 1; dcId <= 5; dcId++) {
+                    Datacenter *dc = getDatacenterWithId(dcId);
+                    dc->suspendConnections(true);
+                    dc->clearAuthKey(HandshakeTypeAll);
+                    dc->clearServerSalts(false);
+                    dc->clearServerSalts(true);
+                    dc->resetAddressAndPortNum();
+                    dc->recreateSessions(HandshakeTypeAll);
+                }
+                currentDatacenterId = (mainDcId > 0) ? mainDcId : 2;
+            } else if (currentDatacenterId == 0) {
+                currentDatacenterId = (mainDcId > 0) ? mainDcId : 2;
+            }
+            // При restore (resetKeys == false) не трогаем сохранённые адреса/сессии/ключи.
+        } else {
+            // Single-server бэкенд: любой dc_id резолвится в одну машину, поэтому
+            // ссылки на файлы вида «dc 3/4/5» продолжают соединяться. Мапим и обычный,
+            // и download/media адрес на один host:port, затем блокируем опции,
+            // чтобы сервер не смог перенаправить клиента куда угодно.
+            serverOptionsLocked = true;
+            for (int dcId = 1; dcId <= 5; dcId++) {
+                Datacenter *dc = getDatacenterWithId(dcId);
+                if (dc == nullptr) {
+                    dc = new Datacenter(instanceNum, dcId);
+                    datacenters[dcId] = dc;
+                }
+                std::vector<TcpAddress> addrs;
+                addrs.emplace_back(host, port, 0, "");
+                std::vector<TcpAddress> downloadAddrs;
+                downloadAddrs.emplace_back(host, port, 0, "");
+                dc->suspendConnections(true);
+                if (resetKeys) {
+                    dc->clearAuthKey(HandshakeTypeAll);
+                }
+                dc->replaceAddresses(addrs, 0);          // regular ipv4
+                dc->replaceAddresses(downloadAddrs, 2);  // download/media ipv4 -> тот же host
+                dc->resetAddressAndPortNum();
+                dc->recreateSessions(HandshakeTypeAll);
+            }
+            currentDatacenterId = (mainDcId > 0) ? mainDcId : 1;
+        }
+        movingToDatacenterId = DEFAULT_DATACENTER_ID;
+        saveConfig();
+
+        // 3. Переподключаемся на текущем DC, если ключа ещё нет.
+        Datacenter *cur = getDatacenterWithId(currentDatacenterId);
+        if (cur != nullptr && !cur->hasAuthKey(ConnectionTypeGeneric, 0) && !cur->isHandshakingAny()) {
+            cur->clearServerSalts(false);
+            cur->clearServerSalts(true);
+            cur->beginHandshake(HandshakeTypeAll, true);
+        }
+        // 4. Telegram: обновляем полную таблицу multi-DC (download/media эндпоинты
+        //    и альтернативные адреса), чтобы медиа с не-домашних DC грузились.
+        if (isTelegram) {
+            updateDcSettings(0, false, false);
+        }
+        scheduleTask([&] {
+            processRequestQueue(0, 0);
+        });
+    });
+}
+
 void ConnectionsManager::attachConnection(ConnectionSocket *connection) {
     if (std::find(activeConnections.begin(), activeConnections.end(), connection) != activeConnections.end()) {
         return;
@@ -3459,7 +3574,7 @@ void ConnectionsManager::updateDcSettings(uint32_t dcNum, bool workaround, bool 
                 info->addAddressAndPort(dcOption);
             }
 
-            if (!map.empty()) {
+            if (!map.empty() && !serverOptionsLocked) {
                 for (auto & iter : map) {
                     Datacenter *datacenter = getDatacenterWithId(iter.first);
                     DatacenterInfo *info = iter.second.get();
@@ -3476,6 +3591,7 @@ void ConnectionsManager::updateDcSettings(uint32_t dcNum, bool workaround, bool 
                         moveToDatacenter(iter.first);
                     }
                 }
+                initDatacenters();
                 saveConfig();
                 scheduleTask([&] {
                     processRequestQueue(AllConnectionTypes, 0);

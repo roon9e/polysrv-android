@@ -38,6 +38,7 @@ import androidx.annotation.StringRes;
 import org.telegram.utils.localization.Localization;
 import org.telegram.localization.LocalizationUtils;
 import org.telegram.messenger.time.FastDateFormat;
+import org.telegram.polysrv.PolySrvServers;
 import org.telegram.tgnet.Vector;
 import org.telegram.ui.Components.TypefaceSpan;
 import org.telegram.ui.Stars.StarsController;
@@ -765,7 +766,23 @@ public class LocaleController {
         }
 
         AndroidUtilities.runOnUIThread(() -> currentSystemLocale = getSystemLocaleStringIso639());
+
+        // При смене активного аккаунта, если изменился scope сервера, удалённый
+        // языковой пакет перекачивается — иначе строки бренда одного сервера
+        // «протекают» в другой аккаунт.
+        NotificationCenter.getGlobalInstance().addObserver((id, account, args) -> {
+            if (id == NotificationCenter.activeAccountChanged) {
+                int newAccount = args.length > 0 && args[0] instanceof Integer ? (Integer) args[0] : UserConfig.selectedAccount;
+                String scope = PolySrvServers.serverScopeKeyForAccount(newAccount);
+                if (lastActiveServerScope == null || !lastActiveServerScope.equals(scope)) {
+                    lastActiveServerScope = scope;
+                    reloadCurrentRemoteLocale(newAccount, null, true, null);
+                }
+            }
+        }, NotificationCenter.activeAccountChanged);
     }
+
+    private String lastActiveServerScope;
 
     public static String getLanguageFlag(String countryCode) {
         if (countryCode.length() != 2 || countryCode.equals("YL")) return null;

@@ -324,6 +324,48 @@ void Handshake::cleanupServerKeys() {
     serverPublicKeysFingerprints.clear();
 }
 
+uint64_t Handshake::calculatePublicKeyFingerprint(const std::string &pem) {
+    if (pem.empty()) {
+        return 0;
+    }
+    BIO *keyBio = BIO_new(BIO_s_mem());
+    BIO_write(keyBio, pem.c_str(), (int) pem.length());
+    RSA *rsaKey = PEM_read_bio_RSAPublicKey(keyBio, nullptr, nullptr, nullptr);
+    BIO_free(keyBio);
+    if (rsaKey == nullptr) {
+        if (LOGS_ENABLED) DEBUG_E("calculatePublicKeyFingerprint: failed to parse PEM");
+        return 0;
+    }
+
+    const BIGNUM *n = nullptr;
+    const BIGNUM *e = nullptr;
+    RSA_get0_key(rsaKey, &n, &e, nullptr);
+
+    int nLen = BN_num_bytes(n);
+    int eLen = BN_num_bytes(e);
+    auto nBuf = std::vector<uint8_t>(nLen > 0 ? nLen : 1);
+    auto eBuf = std::vector<uint8_t>(eLen > 0 ? eLen : 1);
+    BN_bn2bin(n, nBuf.data());
+    BN_bn2bin(e, eBuf.data());
+
+    // TL-сериализация bytes(n) + bytes(e), затем SHA1; фингерпринт — нижние
+    // 64 бита (последние 8 байт, little-endian) дайджеста.
+    NativeByteBuffer *buffer = BuffersStorage::getInstance().getFreeBuffer((uint32_t) (nLen + eLen + 16));
+    buffer->writeByteArray(nBuf.data(), (uint32_t) nLen, nullptr);
+    buffer->writeByteArray(eBuf.data(), (uint32_t) eLen, nullptr);
+
+    uint8_t sha1Buffer[20];
+    SHA1(buffer->bytes(), buffer->position(), sha1Buffer);
+    buffer->reuse();
+    RSA_free(rsaKey);
+
+    uint64_t fingerprint = 0;
+    for (int i = 0; i < 8; i++) {
+        fingerprint |= ((uint64_t) sha1Buffer[12 + i]) << (8 * i);
+    }
+    return fingerprint;
+}
+
 void Handshake::processHandshakeResponse(TLObject *message, int64_t messageId) {
     if (handshakeState == 0) {
         return;
@@ -362,8 +404,17 @@ void Handshake::processHandshakeResponse_resPQ(TLObject *message, int64_t messag
                 }
             }
         } else {
-            if (serverPublicKeys.empty()) {
-                if (ConnectionsManager::getInstance(currentDatacenter->instanceNum).testBackend) {
+            {
+                // Всегда перечитываем ключ из инстанса аккаунта: thread_local
+                // serverPublicKeys общий для всех аккаунтов, из-за кэша аккаунт A
+                // мог бы использовать ключ аккаунта B.
+                serverPublicKeys.clear();
+                serverPublicKeysFingerprints.clear();
+                auto &cm = ConnectionsManager::getInstance(currentDatacenter->instanceNum);
+                if (!cm.customPublicKey.empty() && cm.customPublicKeyFingerprint != 0) {
+                    serverPublicKeys.push_back(cm.customPublicKey);
+                    serverPublicKeysFingerprints.push_back(cm.customPublicKeyFingerprint);
+                } else if (cm.testBackend) {
                     serverPublicKeys.emplace_back("-----BEGIN RSA PUBLIC KEY-----\n"
                                                   "MIIBCgKCAQEAyMEdY1aR+sCR3ZSJrtztKTKqigvO/vBfqACJLZtS7QMgCGXJ6XIR\n"
                                                   "yy7mx66W0/sOFa7/1mAZtEoIokDP3ShoqF4fVNb6XeqgQfaUHd8wJpDWHcR2OFwv\n"

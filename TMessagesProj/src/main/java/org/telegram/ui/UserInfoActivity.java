@@ -485,7 +485,8 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
                 freeAccounts -= (UserConfig.MAX_ACCOUNT_COUNT - UserConfig.MAX_ACCOUNT_DEFAULT_COUNT);
             }
             if (freeAccounts > 0 && availableAccount != null) {
-                presentFragment(new LoginActivity(availableAccount));
+                // Любой аккаунт (в т.ч. на кастомном сервере) может занять любой свободный слот.
+                presentFragment(new ServerSelectFragment(availableAccount));
             } else if (!UserConfig.hasPremiumOnAccounts()) {
                 showDialog(new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null));
             }

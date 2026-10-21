@@ -58,6 +58,12 @@ public:
     void cancelRequestsForGuid(int32_t guid);
     void bindRequestToGuid(int32_t requestToken, int32_t guid);
     void applyDatacenterAddress(uint32_t datacenterId, std::string ipAddress, uint32_t port);
+    // Применяет выбранный сервер к аккаунту (instanceNum):
+    //  - single-server (isTelegram=false): все DC 1..5 мапятся на один host:port, опции с сервера блокируются
+    //  - Telegram (isTelegram=true): восстанавливаются настоящие DC 1..5, опции разблокированы
+    // Задаёт per-instance RSA-ключ, переключает домашний DC, при resetKeys сбрасывает auth keys
+    // и переподключается. Выполняется в сетевом потоке.
+    void applyServerConfig(std::string host, uint32_t port, bool isTelegram, uint32_t mainDcId, std::string pemKey, uint64_t fingerprint, bool resetKeys);
     void setDelegate(ConnectiosManagerDelegate *connectiosManagerDelegate);
     ConnectionState getConnectionState();
     void setUserId(int64_t userId);
@@ -147,6 +153,11 @@ private:
     int32_t pingTime;
     int64_t pingTimeMs;
     bool testBackend = false;
+    std::string customPublicKey;
+    uint64_t customPublicKeyFingerprint = 0;
+    // Для single-server бэкенда help.getConfig не должен перетирать зафиксированное
+    // отображение DC 1..5 -> host:port (аналог DcOptions::optionsLocked в десктопе).
+    bool serverOptionsLocked = false;
     bool clientBlocked = true;
     std::string lastInitSystemLangcode = "";
     std::atomic<uint32_t> lastRequestToken{50000000};
