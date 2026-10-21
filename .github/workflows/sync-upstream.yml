@@ -49,8 +49,11 @@ jobs:
         run: |
           git remote add upstream https://github.com/DrKLO/Telegram.git 2>/dev/null || \
           git remote set-url upstream https://github.com/DrKLO/Telegram.git
-          git fetch --depth=1 upstream master
+          # Тянем только tip (история не нужна: патч накладывается на дерево),
+          # fallback на HEAD — если апстрим переименует ветку master.
+          git fetch --depth=1 --no-tags upstream master || git fetch --depth=1 --no-tags upstream HEAD
           echo "upstream commit: $(git rev-parse FETCH_HEAD)"
+          git log -1 --format='upstream date: %ci  subject: %s' FETCH_HEAD
 
       - name: Checkout upstream tree
         run: |
