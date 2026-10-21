@@ -1,0 +1,148 @@
+name: Sync upstream
+
+# Подтягивает новый коммит DrKLO/Telegram и заново накладывает наши правки
+# (scripts/polysrv_edits.json). Если наши правки больше не ложатся на новый
+# апстрим — воркфлоу падает с понятным отчётом, результат не коммитится.
+#
+# Запуск: вкладка Actions -> Sync upstream -> Run workflow.
+# Или автоматически каждые 6 часов.
+
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      build_apk:
+        description: 'Собрать APK (arm64) и приложить артефактом'
+        type: boolean
+        default: true
+      branch:
+        description: 'Ветка для результата (пусто = только проверка, без коммита)'
+        type: string
+        default: 'upstream-sync'
+      open_pr:
+        description: 'Открыть/обновить PR с результатом'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync with DrKLO/Telegram
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout our repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/DrKLO/Telegram.git 2>/dev/null || \
+          git remote set-url upstream https://github.com/DrKLO/Telegram.git
+          git fetch --depth=1 upstream master
+          echo "upstream commit: $(git rev-parse FETCH_HEAD)"
+
+      - name: Checkout upstream tree
+        run: |
+          rm -rf /tmp/upstream
+          git worktree add --detach /tmp/upstream FETCH_HEAD
+          ls /tmp/upstream | head
+
+      - name: Check that our changes still apply
+        run: |
+          python3 scripts/patch_polysrv.py --target /tmp/upstream --check --strict
+
+      - name: Apply our changes
+        run: |
+          python3 scripts/patch_polysrv.py --target /tmp/upstream
+
+      - name: Verify no changes were lost
+        run: |
+          # ключевые наши куски должны присутствовать в итоговом дереве
+          set -e
+          grep -q "applyServerConfig" /tmp/upstream/TMessagesProj/jni/tgnet/ConnectionsManager.cpp
+          grep -q "applyDcTable" /tmp/upstream/TMessagesProj/jni/tgnet/ConnectionsManager.cpp
+          grep -q "calculatePublicKeyFingerprint" /tmp/upstream/TMessagesProj/jni/tgnet/Handshake.cpp
+          test -f /tmp/upstream/TMessagesProj/src/main/java/org/telegram/polysrv/PolySrvServers.java
+          test -f /tmp/upstream/servers.env
+          echo "our changes are in place"
+
+      - name: Commit result
+        if: ${{ inputs.branch != '' }}
+        run: |
+          set -e
+          cd /tmp/upstream
+          # worktree — часть нашего репозитория, коммит уходит прямо в него
+          git checkout -B "${{ inputs.branch }}"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+          else
+            git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
+              commit -m "chore: sync with upstream DrKLO/Telegram $(git rev-parse --short FETCH_HEAD)"
+            git push --force-with-lease origin "${{ inputs.branch }}"
+          fi
+
+      - name: Open PR
+        if: ${{ inputs.open_pr && inputs.branch != '' }}
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: ${{ inputs.branch }}
+          title: 'Sync with upstream DrKLO/Telegram'
+          body: |
+            Автосинхронизация с апстримом. Наши правки наложены заново
+            (`scripts/polysrv_edits.json`). Проверяй, что ничего не сломалось.
+          delete-branch: false
+
+      - name: Set up JDK
+        if: ${{ inputs.build_apk }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        if: ${{ inputs.build_apk }}
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        if: ${{ inputs.build_apk }}
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" \
+                    "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Init submodules
+        if: ${{ inputs.build_apk }}
+        working-directory: /tmp/upstream
+        run: |
+          git submodule update --init --recursive
+          git submodule status | head -25
+
+      - name: Build APK (arm64 only)
+        if: ${{ inputs.build_apk }}
+        working-directory: /tmp/upstream
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          chmod +x gradlew
+          ./gradlew :TMessagesProj_App:assembleAfatRelease -PabiFilters=arm64-v8a --stacktrace
+
+      - name: Upload APK
+        if: ${{ inputs.build_apk }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: PolySrv-apk-arm64
+          path: /tmp/upstream/TMessagesProj_App/build/outputs/apk/afat/release/*.apk
+          if-no-files-found: error
