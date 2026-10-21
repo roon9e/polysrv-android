@@ -162,10 +162,19 @@ jobs:
             (`scripts/polysrv_edits.json`). Проверяй, что ничего не сломалось.
           delete-branch: false
 
-      - name: Pack patched source
+      - name: Init submodules
+        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
+        working-directory: /tmp/upstream
+        run: |
+          set -e
+          git submodule update --init --recursive
+          git submodule status | head -25
+
+      - name: Pack patched source (with submodules)
         if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
         run: |
           set -e
+          # пакуем дерево вместе с сабмодулями (~1 ГБ), чтобы build-джобы не качали их каждый
           tar --exclude=.git --exclude=build --exclude=.cxx -czf /tmp/upstream-src.tar.gz -C /tmp upstream
           ls -lh /tmp/upstream-src.tar.gz
 
@@ -230,10 +239,6 @@ jobs:
           sdkmanager --sdk_root="$ANDROID_HOME" \
             "platform-tools" "platforms;android-36" "build-tools;36.0.0" \
             "ndk;27.2.12479018" "cmake;3.22.1"
-
-      - name: Init submodules
-        working-directory: /tmp/upstream
-        run: git submodule update --init --recursive
 
       - name: Build APK (${{ matrix.abi }})
         working-directory: /tmp/upstream
