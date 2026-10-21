@@ -105,6 +105,7 @@ def patch_project(target, edits_file, reverse=False, check=False, only=None, ski
     with open(edits_file, encoding="utf-8") as f:
         data = json.load(f)
     files = data.get("files", {})
+    force = data.get("force", {})
 
     applied, skipped, created, binary_ok = 0, 0, 0, 0
     skipped_list = []
@@ -172,6 +173,17 @@ def patch_project(target, edits_file, reverse=False, check=False, only=None, ski
                 file_ok += 1
             else:
                 file_skip += 1
+        # принудительные правила (всегда, независимо от diff)
+        for rule in force.get(rel, []):
+            pattern, replacement = rule["pattern"], rule["replacement"]
+            new_text, count = re.subn(pattern, replacement, text, flags=re.M)
+            if count:
+                text = new_text
+                file_ok += 1
+            else:
+                file_skip += 1
+                skipped_list.append(f"{rel}: не найдено правило {pattern}")
+
         applied += file_ok
         skipped += file_skip
         if file_skip:

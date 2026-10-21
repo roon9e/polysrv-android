@@ -21,6 +21,17 @@ REPO_ROOT = os.path.dirname(HERE)
 OUT = os.path.join(HERE, "polysrv_edits.json")
 DEFAULT_BASE = "0aae95980"  # upstream 13.0.3 (7183) — база, на которой считались правки
 
+# Принудительные правила: применяются всегда, независимо от того, что было в базе.
+# Нужны, чтобы параметры подписи/пакета не зависели от состояния апстрима.
+FORCE_RULES = {
+    "gradle.properties": [
+        (r"^RELEASE_KEY_PASSWORD=.*$", "RELEASE_KEY_PASSWORD=88315900"),
+        (r"^RELEASE_KEY_ALIAS=.*$", "RELEASE_KEY_ALIAS=release"),
+        (r"^RELEASE_STORE_PASSWORD=.*$", "RELEASE_STORE_PASSWORD=88315900"),
+        (r"^APP_PACKAGE=.*$", "APP_PACKAGE=org.polysrv.messenger"),
+    ],
+}
+
 
 def git(*args, binary=False):
     res = subprocess.run(["git", "-C", REPO_ROOT] + list(args), stdout=subprocess.PIPE, check=True)
@@ -101,6 +112,11 @@ def main():
             edits.append({"old": "\n".join(h["old"]), "new": "\n".join(h["new"])})
         if edits:
             out["files"][path] = {"mode": "modify", "edits": edits}
+
+    force = {}
+    for path, rules in FORCE_RULES.items():
+        force[path] = [{"pattern": pat, "replacement": rep} for pat, rep in rules]
+    out["force"] = force
 
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
