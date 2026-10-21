@@ -117,12 +117,15 @@ android {
         manifest.srcFile '../TMessagesProj/config/release/AndroidManifest.xml'
     }
 
+    // Список ABI можно переопределить через -PabiFilters=arm64-v8a (быстрая сборка в CI)
+    def abiFiltersList = ((project.findProperty("abiFilters") ?: "armeabi-v7a,arm64-v8a,x86,x86_64").toString().split(",") as String[]).collect { it.trim() }.findAll { !it.isEmpty() }
+
     flavorDimensions "minApi"
 
     productFlavors {
         bundleAfat {
             ndk {
-                abiFilters (project.findProperty("abiFilters") ?: "armeabi-v7a,arm64-v8a,x86,x86_64").split(",")
+                abiFilters(*abiFiltersList)
             }
             ext {
                 abiVersionCode = 1
@@ -131,7 +134,7 @@ android {
         }
         afat {
             ndk {
-                abiFilters (project.findProperty("abiFilters") ?: "armeabi-v7a,arm64-v8a,x86,x86_64").split(",")
+                abiFilters(*abiFiltersList)
             }
             sourceSets.debug {
                 manifest.srcFile '../TMessagesProj/config/debug/AndroidManifest_SDK23.xml'
