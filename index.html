@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PolySrv — серверы и обновления</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 32px 20px 60px; background: #17212b; color: #e6edf3;
+         font: 16px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  .sub { color: #8fa3b5; margin-bottom: 26px; font-size: 14px; }
+  .card { background: #0f1620; border: 1px solid #22303c; border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #3aa675; flex: 0 0 auto; }
+  .dot.off { background: #d05a5a; }
+  .name { font-weight: 600; }
+  .addr { color: #8fa3b5; font-size: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .badge { margin-left: auto; font-size: 12px; padding: 3px 9px; border-radius: 999px;
+           background: #1d2b38; color: #8fa3b5; white-space: nowrap; }
+  .badge.tg { background: #2b5278; color: #cfe4ff; }
+  a { color: #6ab3f3; }
+  code { background: #0b1118; padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+  .files { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+  .files a { text-decoration: none; border: 1px solid #22303c; border-radius: 8px; padding: 7px 12px; font-size: 14px; }
+  .files a:hover { background: #16212c; }
+  .upd { margin-top: 6px; font-size: 14px; color: #b8c6d4; }
+  .foot { margin-top: 28px; color: #64798c; font-size: 13px; }
+  code.k { color: #7ee0b8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>PolySrv</h1>
+  <div class="sub">Список серверов и обновлений. Эти же файлы читает приложение при старте.</div>
+
+  <div class="card">
+    <div class="row" style="margin-bottom:10px"><b>Серверы</b></div>
+    <div id="servers"><div class="addr">загрузка…</div></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin-bottom:6px"><b>Обновление</b></div>
+    <div id="update" class="upd">загрузка…</div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin-bottom:6px"><b>Файлы</b></div>
+    <div class="files">
+      <a href="servers.json">servers.json</a>
+      <a href="update.json">update.json</a>
+    </div>
+  </div>
+
+  <div class="foot">Обновляется автоматически при изменении ветки <code class="k">gh-pages</code>.</div>
+</div>
+
+<script>
+async function loadServers() {
+  const box = document.getElementById('servers');
+  try {
+    const r = await fetch('servers.json?t=' + Date.now(), {cache: 'no-store'});
+    const d = await r.json();
+    box.innerHTML = '';
+    (d.servers || []).forEach(s => {
+      const dc = (s.dc || []).length;
+      const el = document.createElement('div');
+      el.className = 'row';
+      el.style.marginBottom = '10px';
+      el.innerHTML =
+        '<span class="dot"></span>' +
+        '<span><span class="name"></span><br><span class="addr"></span></span>' +
+        '<span class="badge"></span>';
+      el.querySelector('.name').textContent = s.name || s.id;
+      el.querySelector('.addr').textContent = s.host + ':' + s.port + (dc ? '  ·  DC ' + dc : '');
+      el.querySelector('.badge').textContent = s.isTelegram ? 'Telegram · multi-DC' : 'single-DC';
+      if (s.isTelegram) el.querySelector('.badge').classList.add('tg');
+      box.appendChild(el);
+    });
+    if (!box.children.length) box.innerHTML = '<div class="addr">серверов нет</div>';
+  } catch (e) {
+    box.innerHTML = '<div class="addr">не удалось загрузить servers.json</div>';
+  }
+}
+
+async function loadUpdate() {
+  const box = document.getElementById('update');
+  try {
+    const r = await fetch('update.json?t=' + Date.now(), {cache: 'no-store'});
+    const d = await r.json();
+    let html = 'версия <b>' + (d.version || '?') + '</b> (code ' + (d.versionCode || '?') + ')';
+    if (d.updated) html += ' · обновлено ' + d.updated;
+    if (d.apkUrl) {
+      html += '<br><a href="' + d.apkUrl + '">Скачать APK</a>';
+      if (d.sha256) html += ' <span class="addr">sha256 ' + d.sha256.slice(0, 16) + '…</span>';
+    }
+    if (d.notes) html += '<br>' + d.notes;
+    box.innerHTML = html;
+  } catch (e) {
+    box.innerHTML = '<div class="addr">не удалось загрузить update.json</div>';
+  }
+}
+
+loadServers();
+loadUpdate();
+setInterval(() => { loadServers(); loadUpdate(); }, 60000);
+</script>
+</body>
+</html>
