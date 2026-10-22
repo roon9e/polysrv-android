@@ -82,7 +82,15 @@ def main():
                     # на случай, если в базовом не было этой abi
                     z.extract(name, work)
 
-    # пересобираем APK (deflate, без подписи — она будет после zipalign)
+    # Сохраняем метод сжатия оригинала: .so и resources.arsc часто лежат без сжатия
+    # (и должны остаться такими, иначе Android не сможет их распаковать/выровнять).
+    stored = set()
+    with zipfile.ZipFile(base_path) as z:
+        for info in z.infolist():
+            if info.compress_type == zipfile.ZIP_STORED:
+                stored.add(info.filename)
+
+    # пересобираем APK (подпись будет после zipalign)
     if os.path.exists(unsigned):
         os.remove(unsigned)
     with zipfile.ZipFile(unsigned, "w", zipfile.ZIP_DEFLATED) as z:
@@ -92,7 +100,8 @@ def main():
                 rel = os.path.relpath(full, work)
                 if rel == os.path.basename(unsigned):
                     continue
-                z.write(full, rel)
+                method = zipfile.ZIP_STORED if rel in stored else zipfile.ZIP_DEFLATED
+                z.write(full, rel, compress_type=method)
 
     # zipalign + подпись
     aligned = os.path.join(work, "app-aligned.apk")

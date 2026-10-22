@@ -587,7 +587,7 @@ static JNINativeMethod ConnectionsManagerMethods[] = {
         {"native_bindRequestToGuid", "(III)V", (void *) bindRequestToGuid},
         {"native_applyDatacenterAddress", "(IILjava/lang/String;I)V", (void *) applyDatacenterAddress},
         {"native_applyServerConfig", "(ILjava/lang/String;IZILjava/lang/String;JZ)V", (void *) applyServerConfig},
-        {"native_applyDcTable", "([Ljava/lang/String;[I)V", (void *) applyDcTable},
+        {"native_applyDcTable", "(I[Ljava/lang/String;[I)V", (void *) applyDcTable},
         {"native_setProxySettings", "(ILjava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V", (void *) setProxySettings},
         {"native_getConnectionState", "(I)I", (void *) getConnectionState},
         {"native_setUserId", "(IJ)V", (void *) setUserId},

@@ -48,6 +48,44 @@ public class PolySrvServer {
         }
     }
 
+    /**
+     * Эндпоинт сервера. У серверов из конфига (multi-DC) явного host нет —
+     * берём домашний DC из списка dc.
+     */
+    public String resolvedHost() {
+        if (host != null && !host.isEmpty()) {
+            return host;
+        }
+        if (dc != null) {
+            for (Dc d : dc) {
+                if (mainDcId > 0 && d.id == mainDcId) {
+                    return d.host;
+                }
+            }
+            if (!dc.isEmpty()) {
+                return dc.get(0).host;
+            }
+        }
+        return host != null ? host : "";
+    }
+
+    public int resolvedPort() {
+        if (host != null && !host.isEmpty()) {
+            return port > 0 ? port : 443;
+        }
+        if (dc != null) {
+            for (Dc d : dc) {
+                if (mainDcId > 0 && d.id == mainDcId) {
+                    return d.port > 0 ? d.port : 443;
+                }
+            }
+            if (!dc.isEmpty()) {
+                return dc.get(0).port > 0 ? dc.get(0).port : 443;
+            }
+        }
+        return port > 0 ? port : 443;
+    }
+
     public int effectiveMainDcId() {
         if (mainDcId > 0) return mainDcId;
         return multiDc ? 2 : 1;

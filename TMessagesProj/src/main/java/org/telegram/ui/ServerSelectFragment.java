@@ -162,8 +162,8 @@ public class ServerSelectFragment extends BaseFragment {
 
     private void pingServer(PolySrvServer s) {
         final String id   = s.id;
-        final String host = s.host;
-        final int port    = s.port;
+        final String host = s.resolvedHost();
+        final int port    = s.resolvedPort();
         pingCache.put(id, PING_CHECKING);
         updateRow(id);
         pingPool.submit(() -> {
@@ -261,7 +261,7 @@ public class ServerSelectFragment extends BaseFragment {
         }
         // Online check first, exactly like desktop CheckServerOnline before joining.
         pingPool.submit(() -> {
-            int ms = pingTcp(server.host, server.port);
+            int ms = pingTcp(server.resolvedHost(), server.resolvedPort());
             uiHandler.post(() -> {
                 if (destroyed) return;
                 pingCache.put(server.id, ms);
@@ -271,7 +271,7 @@ public class ServerSelectFragment extends BaseFragment {
                 } else {
                     AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
                     b.setTitle("Server unreachable");
-                    b.setMessage("Couldn't reach " + server.name + " (" + server.host + ":" + server.port + "). Try to connect anyway?");
+                    b.setMessage("Couldn't reach " + server.name + " (" + server.resolvedHost() + ":" + server.resolvedPort() + "). Try to connect anyway?");
                     b.setPositiveButton("Connect", (d, w) -> proceedJoin(server));
                     b.setNegativeButton("Cancel", null);
                     showDialog(b.create());
@@ -617,7 +617,7 @@ public class ServerSelectFragment extends BaseFragment {
                     android.graphics.Shader.TileMode.CLAMP));
 
             nameTv.setText(server.name);
-            StringBuilder endpoint = new StringBuilder(server.host).append(":").append(server.port);
+            StringBuilder endpoint = new StringBuilder(server.resolvedHost()).append(":").append(server.resolvedPort());
             int dcCount = server.dc != null ? server.dc.size() : 0;
             if (dcCount > 1) {
                 endpoint.append("  ·  ").append(dcCount).append(" DC");
