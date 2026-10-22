@@ -171,21 +171,17 @@ jobs:
           REMOTE_TREE=$(git rev-parse "origin/$BRANCH^{tree}" 2>/dev/null || echo "")
           NEW_TREE=$(git write-tree)
           if [ -n "$REMOTE_TREE" ] && [ "$REMOTE_TREE" = "$NEW_TREE" ]; then
-            echo "дерево совпадает с удалённой веткой $BRANCH — ничего не менялось"
+            echo "дерево совпадает с удалённой веткой $BRANCH — ничего не изменилось"
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
               commit -m "chore: sync with upstream DrKLO/Telegram $(git rev-parse --short "$UPSTREAM_SHA")"
             git push --force-with-lease origin "$BRANCH"
-            # тег с SHA апстрима: по нему следующий прогой поймёт, что синхронизироваться не нужно
-            git tag -f upstream-synced "$UPSTREAM_SHA"
-            git push --force origin refs/tags/upstream-synced
             echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            # дерево не изменилось, но запоминаем SHA, чтобы больше не патчить
-            git tag -f upstream-synced "$UPSTREAM_SHA"
-            git push --force origin refs/tags/upstream-synced
           fi
+          # Тег с SHA апстрима: по нему следующий прогон поймёт, что синхронизироваться не нужно
+          git tag -f upstream-synced "$UPSTREAM_SHA"
+          git push --force origin refs/tags/upstream-synced
           # Освобождаем ветку: экшен create-pull-request делает git checkout этой ветки,
           # а она занята нашим worktree -> git падает с "already used by worktree".
           git checkout --detach
