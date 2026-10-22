@@ -13,19 +13,14 @@
   .sub { color: #8fa3b5; margin-bottom: 26px; font-size: 14px; }
   .card { background: #0f1620; border: 1px solid #22303c; border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
   .ttl { font-weight: 600; margin-bottom: 12px; }
-  .row { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+  .row { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
   .row:last-child { margin-bottom: 0; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: #3aa675; flex: 0 0 auto;
          box-shadow: 0 0 6px rgba(58,166,117,.55); }
   .dot.bad { background: #d05a5a; box-shadow: 0 0 6px rgba(208,90,90,.5); }
   .dot.idle { background: #6b7f92; box-shadow: none; }
   .name { font-weight: 600; }
-  .ping { color: #8fa3b5; font-size: 13.5px; font-variant-numeric: tabular-nums; }
-  .ping.good { color: #3aa675; }
-  .ping.warn { color: #d8a13a; }
-  .ping.bad { color: #d05a5a; }
   .addr { color: #7f95a8; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .desc { color: #64798c; font-size: 13px; }
   .badge { margin-left: auto; font-size: 12px; padding: 3px 9px; border-radius: 999px;
            background: #1d2b38; color: #8fa3b5; white-space: nowrap; }
   .badge.tg { background: #2b5278; color: #cfe4ff; }
@@ -36,6 +31,8 @@
   .files a:hover { background: #16212c; }
   .upd { margin-top: 6px; font-size: 14px; color: #b8c6d4; }
   .foot { margin-top: 28px; color: #64798c; font-size: 13px; }
+  .meta { color: #64798c; font-size: 13px; margin-top: 10px; }
+  .meta b { color: #8fa3b5; font-weight: 600; }
   code.k { color: #7ee0b8; }
 </style>
 </head>
@@ -47,7 +44,7 @@
   <div class="card">
     <div class="ttl">Серверы</div>
     <div id="servers"><div class="addr">загрузка…</div></div>
-    <div class="foot" id="checked"></div>
+    <div class="meta" id="checked"></div>
   </div>
 
   <div class="card">
@@ -78,13 +75,6 @@ function endpointOf(s) {
   return {addr: d.host + ':' + (d.port || 443), dc: dcs.length};
 }
 
-function pingClass(s) {
-  if (s.pingMs === undefined || s.pingMs === null || s.pingMs < 0) return 'bad';
-  if (s.pingMs < 100) return 'good';
-  if (s.pingMs < 300) return 'warn';
-  return 'bad';
-}
-
 async function loadServers() {
   const box = document.getElementById('servers');
   try {
@@ -100,35 +90,28 @@ async function loadServers() {
       const name = document.createElement('span');
       name.className = 'name';
       name.textContent = s.name || s.id;
-      const ping = document.createElement('span');
-      ping.className = 'ping ' + pingClass(s);
-      ping.textContent = (s.pingMs === undefined || s.pingMs === null || s.pingMs < 0)
-        ? 'offline' : (s.pingMs + ' ms');
+      const addr = document.createElement('span');
+      addr.className = 'addr';
+      addr.textContent = ep.addr + (ep.dc > 1 ? '  ·  ' + ep.dc + ' DC' : (s.mainDcId ? '  ·  DC' + s.mainDcId : ''));
       const badge = document.createElement('span');
       badge.className = 'badge' + (s.isTelegram ? ' tg' : '');
       badge.textContent = s.isTelegram ? 'Telegram · multi-DC' : 'single-DC';
-      const col = document.createElement('span');
-      col.style.minWidth = '0';
-      const addr = document.createElement('div');
-      addr.className = 'addr';
-      addr.textContent = ep.addr + (ep.dc > 1 ? '  ·  ' + ep.dc + ' DC' : (s.mainDcId ? '  ·  DC' + s.mainDcId : ''));
-      col.appendChild(addr);
-      if (s.description) {
-        const desc = document.createElement('div');
-        desc.className = 'desc';
-        desc.textContent = s.description;
-        col.appendChild(desc);
-      }
       el.appendChild(dot);
       el.appendChild(name);
-      el.appendChild(ping);
-      el.appendChild(col);
+      el.appendChild(addr);
       el.appendChild(badge);
       box.appendChild(el);
     });
     if (!box.children.length) box.innerHTML = '<div class="addr">серверов нет</div>';
-    document.getElementById('checked').textContent = d.checkedAt
-      ? 'пинг проверен: ' + d.checkedAt : '';
+
+    // пинг — рядом с подписью «пинг проверен»
+    const parts = [];
+    if (d.checkedAt) parts.push('пинг проверен: ' + d.checkedAt);
+    const pings = (d.servers || [])
+      .filter(s => typeof s.pingMs === 'number' && s.pingMs >= 0)
+      .map(s => (s.name || s.id) + ' ' + s.pingMs + ' ms');
+    if (pings.length) parts.push('пинг: ' + pings.join(', '));
+    document.getElementById('checked').innerHTML = parts.length ? parts.join(' &nbsp;·&nbsp; ') : '';
   } catch (e) {
     box.innerHTML = '<div class="addr">не удалось загрузить servers.json</div>';
   }
