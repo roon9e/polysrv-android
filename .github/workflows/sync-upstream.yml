@@ -198,7 +198,7 @@ jobs:
           delete-branch: false
 
       - name: Init submodules
-        if: ${{ steps.fetch.outputs.up_to_date != 'true' && steps.opts.outputs.build_apk == 'true' }}
+        if: ${{ steps.opts.outputs.build_apk == 'true' }}
         working-directory: /tmp/upstream
         run: |
           set -e
@@ -206,7 +206,7 @@ jobs:
           git submodule status | head -25
 
       - name: Pack patched source (with submodules)
-        if: ${{ steps.fetch.outputs.up_to_date != 'true' && steps.opts.outputs.build_apk == 'true' }}
+        if: ${{ steps.opts.outputs.build_apk == 'true' }}
         run: |
           set -e
           # пакуем дерево вместе с сабмодулями (~1 ГБ), чтобы build-джобы не качали их каждый
@@ -214,7 +214,7 @@ jobs:
           ls -lh /tmp/upstream-src.tar.gz
 
       - name: Upload patched source
-        if: ${{ steps.fetch.outputs.up_to_date != 'true' && steps.opts.outputs.build_apk == 'true' }}
+        if: ${{ steps.opts.outputs.build_apk == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: upstream-src
