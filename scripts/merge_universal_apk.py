@@ -117,8 +117,19 @@ def main():
 
     with zipfile.ZipFile(args.out) as z:
         abis = sorted({n.split("/")[1] for n in z.namelist() if n.startswith("lib/")})
+        has_lib = any(n.endswith("libtmessages.49.so") for n in z.namelist())
     size = os.path.getsize(args.out) / (1024 * 1024)
     print(f"готово: {args.out} ({size:.1f} МБ), ABI: {', '.join(abis)}")
+
+    expected = sorted(p[0] for p in pairs)
+    missing = [a for a in expected if a not in abis]
+    if missing:
+        sys.exit(f"ОШИБКА: в итоговом APK нет ABI: {', '.join(missing)} (есть: {', '.join(abis)})")
+    if not has_lib:
+        sys.exit("ОШИБКА: в итоговом APK нет libtmessages.49.so")
+    if len(expected) > 1 and len(abis) < len(expected):
+        sys.exit(f"ОШИБКА: ожидалось {len(expected)} ABI, получилось {len(abis)}")
+    print(f"проверка ок: {len(abis)} ABI, нативная библиотека на месте")
 
 
 if __name__ == "__main__":

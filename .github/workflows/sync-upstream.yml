@@ -307,22 +307,27 @@ jobs:
         with:
           pattern: apk-*
           path: /tmp/apks
-          merge-multiple: true
+          # ВАЖНО: без merge-multiple — во всех артефактах файл называется app.apk,
+          # при слиянии они перезатирали друг друга (в universal попадал только один ABI).
+          merge-multiple: false
 
       - name: List downloaded APKs
-        run: ls -lh /tmp/apks
+        run: find /tmp/apks -name '*.apk' -exec ls -lh {} \;
 
       - name: Merge into universal APK
         run: |
           set -e
           ARGS=""
-          for f in /tmp/apks/*.apk; do
-            base="$(basename "$f")"
-            abi="$(echo "$base" | sed -n 's/^apk-\(.*\)\.apk$/\1/p')"
+          for d in /tmp/apks/*/; do
+            f="$(ls "$d"*.apk 2>/dev/null | head -1)"
+            [ -z "$f" ] && continue
+            abi="$(basename "$d" | sed -n 's/^apk-\(.*\)$/\1/p')"
             if [ -z "$abi" ]; then abi="$(basename "$f" .apk)"; fi
             echo "  $abi <- $f"
             ARGS="$ARGS $abi=$f"
           done
+          echo "аргументы:$ARGS"
+          [ -n "$ARGS" ] || { echo "нет APK для склейки"; exit 1; }
           # параметры подписи берём из gradle.properties нашего репо
           KS_PASS=$(grep -E '^RELEASE_STORE_PASSWORD=' gradle.properties | cut -d= -f2)
           KEY_PASS=$(grep -E '^RELEASE_KEY_PASSWORD=' gradle.properties | cut -d= -f2)
