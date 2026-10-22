@@ -1,13 +1,16 @@
 name: Deploy site (gh-pages)
 
-# Деплоит статический сайт PolySrv (ветка gh-pages: index.html, servers.json, update.json)
-# на GitHub Pages: https://roon9e.github.io/polysrv-android/
+# Обновляет данные о пинге серверов на статическом сайте PolySRV.
 #
-# Запускается автоматически при изменении ветки gh-pages, а также вручную.
+# Сайт лежит в ветке gh-pages (index.html, servers.json, update.json) и отдаётся
+# GitHub Pages напрямую из ветки — поэтому деплой делается обычным git push
+# в gh-pages (Pages пересобирается сам). actions/deploy-pages не используем:
+# environment "github-pages" разрешает деплой только с защищённых ветвей,
+# и запуски из master падали с "Branch master is not allowed to deploy".
+#
+# Запускается по расписанию (каждые 30 минут) и вручную.
 
 on:
-  push:
-    branches: [gh-pages]
   schedule:
     - cron: '*/30 * * * *'
   workflow_dispatch:
@@ -15,21 +18,16 @@ on:
     types: [deploy-site]
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: Deploy to GitHub Pages
+  refresh:
+    name: Refresh ping data
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout site
         uses: actions/checkout@v4
@@ -49,18 +47,16 @@ jobs:
           # меряем TCP-connect до каждого сервера и пишем pingMs/online прямо в servers.json
           python3 scripts-src/scripts/ping_servers.py site/servers.json --timeout 3
 
-      - name: Configure Pages
-        id: pages
-        uses: actions/configure-pages@v5
-        with:
-          # включить Pages автоматически, если есть права (иначе — включи вручную)
-          enablement: true
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Commit and push to gh-pages
+        working-directory: site
+        run: |
+          set -e
+          git add servers.json
+          if git diff --cached --quiet; then
+            echo "ping data unchanged"
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="github-actions[bot]@users.noreply.github.com" \
+              commit -m "Обновлён ping серверов"
+          git push origin HEAD:gh-pages
