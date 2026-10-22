@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PolySrv — серверы и обновления</title>
+<title>PolySrv — servers and updates</title>
 <style>
   :root { color-scheme: dark; }
   body { margin: 0; padding: 32px 20px 60px; background: #17212b; color: #e6edf3;
@@ -32,35 +32,34 @@
   .upd { margin-top: 6px; font-size: 14px; color: #b8c6d4; }
   .foot { margin-top: 28px; color: #64798c; font-size: 13px; }
   .meta { color: #64798c; font-size: 13px; margin-top: 10px; }
-  .meta b { color: #8fa3b5; font-weight: 600; }
   code.k { color: #7ee0b8; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>PolySrv</h1>
-  <div class="sub">Серверы, пинг и обновления. Эти же файлы читает приложение при старте.</div>
+  <div class="sub">Servers, ping and updates. The app reads these same files on startup.</div>
 
   <div class="card">
-    <div class="ttl">Серверы</div>
-    <div id="servers"><div class="addr">загрузка…</div></div>
+    <div class="ttl">Servers</div>
+    <div id="servers"><div class="addr">loading…</div></div>
     <div class="meta" id="checked"></div>
   </div>
 
   <div class="card">
-    <div class="ttl">Обновление</div>
-    <div id="update" class="upd">загрузка…</div>
+    <div class="ttl">Update</div>
+    <div id="update" class="upd">loading…</div>
   </div>
 
   <div class="card">
-    <div class="ttl">Файлы</div>
+    <div class="ttl">Files</div>
     <div class="files">
       <a href="servers.json">servers.json</a>
       <a href="update.json">update.json</a>
     </div>
   </div>
 
-  <div class="foot">Обновляется автоматически при изменении ветки <code class="k">gh-pages</code>.</div>
+  <div class="foot">Updated automatically when the <code class="k">gh-pages</code> branch changes.</div>
 </div>
 
 <script>
@@ -102,18 +101,18 @@ async function loadServers() {
       el.appendChild(badge);
       box.appendChild(el);
     });
-    if (!box.children.length) box.innerHTML = '<div class="addr">серверов нет</div>';
+    if (!box.children.length) box.innerHTML = '<div class="addr">no servers</div>';
 
-    // пинг — рядом с подписью «пинг проверен»
+    // ping — next to the "ping checked" note
     const parts = [];
-    if (d.checkedAt) parts.push('пинг проверен: ' + d.checkedAt);
+    if (d.checkedAt) parts.push('ping checked: ' + d.checkedAt);
     const pings = (d.servers || [])
       .filter(s => typeof s.pingMs === 'number' && s.pingMs >= 0)
       .map(s => (s.name || s.id) + ' ' + s.pingMs + ' ms');
-    if (pings.length) parts.push('пинг: ' + pings.join(', '));
+    if (pings.length) parts.push('ping: ' + pings.join(', '));
     document.getElementById('checked').innerHTML = parts.length ? parts.join(' &nbsp;·&nbsp; ') : '';
   } catch (e) {
-    box.innerHTML = '<div class="addr">не удалось загрузить servers.json</div>';
+    box.innerHTML = '<div class="addr">failed to load servers.json</div>';
   }
 }
 
@@ -122,16 +121,16 @@ async function loadUpdate() {
   try {
     const r = await fetch('update.json?t=' + Date.now(), {cache: 'no-store'});
     const d = await r.json();
-    let html = 'версия <b>' + (d.version || '?') + '</b> (code ' + (d.versionCode || '?') + ')';
-    if (d.updated) html += ' · обновлено ' + d.updated;
+    let html = 'version <b>' + (d.version || '?') + '</b> (code ' + (d.versionCode || '?') + ')';
+    if (d.updated) html += ' · updated ' + d.updated;
     if (d.apkUrl) {
-      html += '<br><a href="' + d.apkUrl + '">Скачать APK</a>';
+      html += '<br><a href="' + d.apkUrl + '">Download APK</a>';
       if (d.sha256) html += ' <span class="addr">sha256 ' + d.sha256.slice(0, 16) + '…</span>';
     }
     if (d.notes) html += '<br>' + d.notes;
     box.innerHTML = html;
   } catch (e) {
-    box.innerHTML = '<div class="addr">не удалось загрузить update.json</div>';
+    box.innerHTML = '<div class="addr">failed to load update.json</div>';
   }
 }
 

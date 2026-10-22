@@ -4,5 +4,5 @@
   "package": "org.polysrv.messenger",
   "updated": "2026-10-22",
   "apkUrl": "https://github.com/roon9e/polysrv-android/releases/latest/download/app-universal.apk",
-  "notes": "PolySrv — сборка с выбором серверов (Telegram / свой), схема srv://, конфиг с этого сайта."
+  "notes": "PolySrv — build with server selection (Telegram / custom), srv:// deep links, and the server list served from this site."
 }
