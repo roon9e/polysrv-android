@@ -7,6 +7,7 @@ name: Sync upstream
 # Запуск: вкладка Actions -> Sync upstream -> Run workflow.
 # Или автоматически каждые 6 часов.
 #
+# Если апстрим не изменился — воркфлоу заканчивается сразу, без патча/PR/сборки.
 # Сборка идёт в матрице: каждый ABI собирается в своём job'е (параллельно),
 # затем финальный job склеивает 4 single-ABI APK в один universal.
 
@@ -35,6 +36,10 @@ on:
         description: 'Быстрая сборка: только arm64-v8a (в ~4 раза быстрее, APK без других архитектур)'
         type: boolean
         default: false
+      force:
+        description: 'Синхронизировать, даже если апстрим не изменился'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -43,9 +48,6 @@ permissions:
 concurrency:
   group: sync-upstream
   cancel-in-progress: false
-
-env:
-  ABI_LIST: armeabi-v7a arm64-v8a x86 x86_64
 
 jobs:
   sync:
@@ -58,6 +60,7 @@ jobs:
       branch: ${{ steps.opts.outputs.branch }}
       commit_result: ${{ steps.opts.outputs.commit_result }}
       open_pr: ${{ steps.opts.outputs.open_pr }}
+      up_to_date: ${{ steps.fetch.outputs.up_to_date }}
 
     steps:
       - name: Checkout our repo
@@ -75,6 +78,7 @@ jobs:
             echo "commit_result=$([ "${{ inputs.commit_result }}" = "false" ] && echo false || echo true)"
             echo "open_pr=$([ "${{ inputs.open_pr }}" = "false" ] && echo false || echo true)"
             echo "fast_build=$([ "${{ inputs.fast_build }}" = "true" ] && echo true || echo false)"
+            echo "force=$([ "${{ inputs.force }}" = "true" ] && echo true || echo false)"
             echo "branch=${{ inputs.branch || 'upstream-sync' }}"
           } >> $GITHUB_OUTPUT
           echo "build_apk=${{ steps.opts.outputs.build_apk }} commit_result=${{ steps.opts.outputs.commit_result }} open_pr=${{ steps.opts.outputs.open_pr }} fast_build=${{ steps.opts.outputs.fast_build }} branch=${{ steps.opts.outputs.branch }}"
@@ -93,30 +97,44 @@ jobs:
           echo "polysrv_edits.json актуален"
 
       - name: Fetch upstream
+        id: fetch
         run: |
+          set -e
           git remote add upstream https://github.com/DrKLO/Telegram.git 2>/dev/null || \
           git remote set-url upstream https://github.com/DrKLO/Telegram.git
           # Тянем только tip (история не нужна: патч накладывается на дерево),
           # fallback на HEAD — если апстрим переименует ветку master.
           git fetch --depth=1 --no-tags upstream master || git fetch --depth=1 --no-tags upstream HEAD
-          echo "upstream commit: $(git rev-parse FETCH_HEAD)"
+          NEW_SHA=$(git rev-parse FETCH_HEAD)
+          echo "upstream commit: $NEW_SHA"
           git log -1 --format='upstream date: %ci  subject: %s' FETCH_HEAD
+          # Ранняя проверка: если мы уже синхронизировались с этим SHA — делать нечего
+          LAST_SHA=$(git show "origin/${{ steps.opts.outputs.branch }}:.upstream-sha" 2>/dev/null | tr -d '[:space:]' || true)
+          echo "last synced: ${LAST_SHA:-<нет>}"
+          if [ -n "$LAST_SHA" ] && [ "$LAST_SHA" = "$NEW_SHA" ] && [ "${{ steps.opts.outputs.force }}" != "true" ]; then
+            echo "апстрим не изменился — синхронизация не требуется"
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Checkout upstream tree
+        if: steps.fetch.outputs.up_to_date != 'true'
         run: |
           rm -rf /tmp/upstream
           git worktree add --detach /tmp/upstream FETCH_HEAD
           ls /tmp/upstream | head
 
       - name: Check that our changes still apply
-        run: |
-          python3 scripts/patch_polysrv.py --target /tmp/upstream --check --strict
+        if: steps.fetch.outputs.up_to_date != 'true'
+        run: python3 scripts/patch_polysrv.py --target /tmp/upstream --check --strict
 
       - name: Apply our changes
-        run: |
-          python3 scripts/patch_polysrv.py --target /tmp/upstream
+        if: steps.fetch.outputs.up_to_date != 'true'
+        run: python3 scripts/patch_polysrv.py --target /tmp/upstream
 
       - name: Verify no changes were lost
+        if: steps.fetch.outputs.up_to_date != 'true'
         run: |
           # ключевые наши куски должны присутствовать в итоговом дереве
           set -e
@@ -129,25 +147,33 @@ jobs:
 
       - name: Commit result
         id: commit
-        if: ${{ steps.opts.outputs.commit_result == 'true' && steps.opts.outputs.branch != '' }}
+        if: ${{ steps.fetch.outputs.up_to_date != 'true' && steps.opts.outputs.commit_result == 'true' && steps.opts.outputs.branch != '' }}
         run: |
           set -e
           cd /tmp/upstream
+          BRANCH="${{ steps.opts.outputs.branch }}"
           # worktree — часть нашего репозитория, коммит уходит прямо в него
-          git checkout -B "${{ steps.opts.outputs.branch }}"
+          git checkout -B "$BRANCH" FETCH_HEAD
           # .github (workflow-файлы) в ветку синхронизации не кладём:
           # дефолтный GITHUB_TOKEN не имеет права менять workflow-файлы,
           # и такой push отклоняется GitHub'ом.
           git rm -r -q --cached .github 2>/dev/null || true
           rm -rf .github
+          # запоминаем, с какого апстрима синхронизировались (для ранней проверки)
+          echo "$(git rev-parse FETCH_HEAD)" > .upstream-sha
           git add -A
-          if git diff --cached --quiet; then
-            echo "nothing to commit"
+          # Сравниваем ИТОГОВОЕ ДЕРЕВО с удалённой веткой: если оно идентично —
+          # ничего не коммитим и PR не открываем.
+          git fetch --depth=1 origin "$BRANCH" 2>/dev/null || true
+          REMOTE_TREE=$(git rev-parse "origin/$BRANCH^{tree}" 2>/dev/null || echo "")
+          NEW_TREE=$(git write-tree)
+          if [ -n "$REMOTE_TREE" ] && [ "$REMOTE_TREE" = "$NEW_TREE" ]; then
+            echo "дерево совпадает с удалённой веткой $BRANCH — ничего не менялось"
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
               commit -m "chore: sync with upstream DrKLO/Telegram $(git rev-parse --short FETCH_HEAD)"
-            git push --force-with-lease origin "${{ steps.opts.outputs.branch }}"
+            git push --force-with-lease origin "$BRANCH"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
           # Освобождаем ветку: экшен create-pull-request делает git checkout этой ветки,
@@ -166,7 +192,7 @@ jobs:
           delete-branch: false
 
       - name: Init submodules
-        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
+        if: ${{ steps.fetch.outputs.up_to_date != 'true' && steps.opts.outputs.build_apk == 'true' }}
         working-directory: /tmp/upstream
         run: |
           set -e
@@ -174,7 +200,7 @@ jobs:
           git submodule status | head -25
 
       - name: Pack patched source (with submodules)
-        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
+        if: ${{ steps.fetch.outputs.up_to_date != 'true' && steps.opts.outputs.build_apk == 'true' }}
         run: |
           set -e
           # пакуем дерево вместе с сабмодулями (~1 ГБ), чтобы build-джобы не качали их каждый
@@ -182,7 +208,7 @@ jobs:
           ls -lh /tmp/upstream-src.tar.gz
 
       - name: Upload patched source
-        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch' || steps.opts.outputs.commit_result != 'true') }}
+        if: ${{ steps.fetch.outputs.up_to_date != 'true' && steps.opts.outputs.build_apk == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: upstream-src
@@ -192,7 +218,7 @@ jobs:
   build:
     name: Build ${{ matrix.abi }}
     needs: sync
-    if: needs.sync.outputs.build == 'true'
+    if: needs.sync.outputs.build == 'true' && needs.sync.outputs.up_to_date != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -263,7 +289,7 @@ jobs:
   package:
     name: Package universal APK
     needs: [sync, build]
-    if: needs.sync.outputs.build == 'true'
+    if: needs.sync.outputs.build == 'true' && needs.sync.outputs.up_to_date != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
