@@ -9,10 +9,16 @@ name: Deploy site (gh-pages)
 # и запуски из master падали с "Branch master is not allowed to deploy".
 #
 # Запускается по расписанию (каждые 30 минут) и вручную.
+#
+# ВАЖНО: cron в GitHub Actions — best effort, а не точный таймер. Запуски могут
+# задерживаться на десятки минут (а при высокой нагрузке — теряться), особенно
+# на "круглых" минутах :00/:30. Поэтому минуты сдвинуты на :05/:35, а для
+# гарантированного обновления можно дёргать repository_dispatch (deploy-site)
+# извне (cron-job.org, UptimeRobot и т.п.) — этот триггер срабатывает сразу.
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '5,35 * * * *'
   workflow_dispatch:
   repository_dispatch:
     types: [deploy-site]

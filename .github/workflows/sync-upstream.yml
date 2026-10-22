@@ -7,7 +7,10 @@ name: Sync upstream
 # Запуск: вкладка Actions -> Sync upstream -> Run workflow.
 # Или автоматически каждые 6 часов.
 #
-# Если апстрим не изменился — воркфлоу заканчивается сразу, без патча/PR/сборки.
+# Результат всегда коммитится в ветку `branch` (по умолчанию upstream-sync),
+# PR автоматически не открывается — его можно открыть вручную из этой ветки.
+#
+# Если апстрим не изменился — воркфлоу заканчивается сразу, без патча/сборки.
 # Сборка идёт в матрице: каждый ABI собирается в своём job'е (параллельно),
 # затем финальный job склеивает 4 single-ABI APK в один universal.
 
@@ -21,17 +24,9 @@ on:
         type: boolean
         default: true
       branch:
-        description: 'Ветка для результата (пусто = только проверка, без коммита)'
+        description: 'Ветка для результата (по умолчанию upstream-sync)'
         type: string
         default: 'upstream-sync'
-      open_pr:
-        description: 'Открыть/обновить PR с результатом'
-        type: boolean
-        default: true
-      commit_result:
-        description: 'Закоммитить результат в ветку (иначе только сборка, наш репозиторий не трогаем)'
-        type: boolean
-        default: true
       fast_build:
         description: 'Быстрая сборка: только arm64-v8a (в ~4 раза быстрее, APK без других архитектур)'
         type: boolean
@@ -43,7 +38,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
   group: sync-upstream
@@ -58,8 +52,6 @@ jobs:
       build: ${{ steps.opts.outputs.build_apk }}
       fast: ${{ steps.opts.outputs.fast_build }}
       branch: ${{ steps.opts.outputs.branch }}
-      commit_result: ${{ steps.opts.outputs.commit_result }}
-      open_pr: ${{ steps.opts.outputs.open_pr }}
       up_to_date: ${{ steps.fetch.outputs.up_to_date }}
 
     steps:
@@ -75,13 +67,11 @@ jobs:
           # "false" -> выключено, иначе включено.
           {
             echo "build_apk=$([ "${{ inputs.build_apk }}" = "false" ] && echo false || echo true)"
-            echo "commit_result=$([ "${{ inputs.commit_result }}" = "false" ] && echo false || echo true)"
-            echo "open_pr=$([ "${{ inputs.open_pr }}" = "false" ] && echo false || echo true)"
             echo "fast_build=$([ "${{ inputs.fast_build }}" = "true" ] && echo true || echo false)"
             echo "force=$([ "${{ inputs.force }}" = "true" ] && echo true || echo false)"
             echo "branch=${{ inputs.branch || 'upstream-sync' }}"
           } >> $GITHUB_OUTPUT
-          echo "build_apk=${{ steps.opts.outputs.build_apk }} commit_result=${{ steps.opts.outputs.commit_result }} open_pr=${{ steps.opts.outputs.open_pr }} fast_build=${{ steps.opts.outputs.fast_build }} branch=${{ steps.opts.outputs.branch }}"
+          echo "build_apk=${{ steps.opts.outputs.build_apk }} fast_build=${{ steps.opts.outputs.fast_build }} branch=${{ steps.opts.outputs.branch }}"
 
       - name: Check that polysrv_edits.json is up to date
         run: |
@@ -148,7 +138,7 @@ jobs:
 
       - name: Commit result
         id: commit
-        if: ${{ steps.fetch.outputs.up_to_date != 'true' && steps.opts.outputs.commit_result == 'true' && steps.opts.outputs.branch != '' }}
+        if: ${{ steps.fetch.outputs.up_to_date != 'true' && steps.opts.outputs.branch != '' }}
         run: |
           set -e
           cd /tmp/upstream
@@ -166,7 +156,7 @@ jobs:
           echo "$UPSTREAM_SHA" > .upstream-sha
           git add -A
           # Сравниваем ИТОГОВОЕ ДЕРЕВО с удалённой веткой: если оно идентично —
-          # ничего не коммитим и PR не открываем.
+          # ничего не коммитим.
           git fetch --depth=1 origin "$BRANCH" 2>/dev/null || true
           REMOTE_TREE=$(git rev-parse "origin/$BRANCH^{tree}" 2>/dev/null || echo "")
           NEW_TREE=$(git write-tree)
@@ -182,20 +172,8 @@ jobs:
           # Тег с SHA апстрима: по нему следующий прогон поймёт, что синхронизироваться не нужно
           git tag -f upstream-synced "$UPSTREAM_SHA"
           git push --force origin refs/tags/upstream-synced
-          # Освобождаем ветку: экшен create-pull-request делает git checkout этой ветки,
-          # а она занята нашим worktree -> git падает с "already used by worktree".
+          # Отпускаем ветку (она занята worktree'ом) — дальше дерево используется для сборки.
           git checkout --detach
-
-      - name: Open PR
-        if: ${{ steps.commit.outputs.changed == 'true' && steps.opts.outputs.open_pr == 'true' && steps.opts.outputs.commit_result == 'true' && steps.opts.outputs.branch != '' }}
-        uses: peter-evans/create-pull-request@v6
-        with:
-          branch: ${{ steps.opts.outputs.branch }}
-          title: 'Sync with upstream DrKLO/Telegram'
-          body: |
-            Автосинхронизация с апстримом. Наши правки наложены заново
-            (`scripts/polysrv_edits.json`). Проверяй, что ничего не сломалось.
-          delete-branch: false
 
       - name: Init submodules
         if: ${{ steps.opts.outputs.build_apk == 'true' }}
