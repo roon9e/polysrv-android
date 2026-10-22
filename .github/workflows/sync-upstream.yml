@@ -150,6 +150,9 @@ jobs:
             git push --force-with-lease origin "${{ steps.opts.outputs.branch }}"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+          # Освобождаем ветку: экшен create-pull-request делает git checkout этой ветки,
+          # а она занята нашим worktree -> git падает с "already used by worktree".
+          git checkout --detach
 
       - name: Open PR
         if: ${{ steps.commit.outputs.changed == 'true' && steps.opts.outputs.open_pr == 'true' && steps.opts.outputs.commit_result == 'true' && steps.opts.outputs.branch != '' }}
