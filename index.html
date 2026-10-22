@@ -12,11 +12,20 @@
   h1 { margin: 0 0 4px; font-size: 26px; }
   .sub { color: #8fa3b5; margin-bottom: 26px; font-size: 14px; }
   .card { background: #0f1620; border: 1px solid #22303c; border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
-  .row { display: flex; align-items: center; gap: 12px; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: #3aa675; flex: 0 0 auto; }
-  .dot.off { background: #d05a5a; }
+  .ttl { font-weight: 600; margin-bottom: 12px; }
+  .row { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+  .row:last-child { margin-bottom: 0; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #3aa675; flex: 0 0 auto;
+         box-shadow: 0 0 6px rgba(58,166,117,.55); }
+  .dot.bad { background: #d05a5a; box-shadow: 0 0 6px rgba(208,90,90,.5); }
+  .dot.idle { background: #6b7f92; box-shadow: none; }
   .name { font-weight: 600; }
-  .addr { color: #8fa3b5; font-size: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .ping { color: #8fa3b5; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .ping.good { color: #3aa675; }
+  .ping.warn { color: #d8a13a; }
+  .ping.bad { color: #d05a5a; }
+  .addr { color: #7f95a8; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .desc { color: #64798c; font-size: 13px; }
   .badge { margin-left: auto; font-size: 12px; padding: 3px 9px; border-radius: 999px;
            background: #1d2b38; color: #8fa3b5; white-space: nowrap; }
   .badge.tg { background: #2b5278; color: #cfe4ff; }
@@ -33,20 +42,21 @@
 <body>
 <div class="wrap">
   <h1>PolySrv</h1>
-  <div class="sub">Список серверов и обновлений. Эти же файлы читает приложение при старте.</div>
+  <div class="sub">Серверы, пинг и обновления. Эти же файлы читает приложение при старте.</div>
 
   <div class="card">
-    <div class="row" style="margin-bottom:10px"><b>Серверы</b></div>
+    <div class="ttl">Серверы</div>
     <div id="servers"><div class="addr">загрузка…</div></div>
+    <div class="foot" id="checked"></div>
   </div>
 
   <div class="card">
-    <div class="row" style="margin-bottom:6px"><b>Обновление</b></div>
+    <div class="ttl">Обновление</div>
     <div id="update" class="upd">загрузка…</div>
   </div>
 
   <div class="card">
-    <div class="row" style="margin-bottom:6px"><b>Файлы</b></div>
+    <div class="ttl">Файлы</div>
     <div class="files">
       <a href="servers.json">servers.json</a>
       <a href="update.json">update.json</a>
@@ -57,6 +67,24 @@
 </div>
 
 <script>
+function endpointOf(s) {
+  if (s.host) {
+    return {addr: s.host + ':' + (s.port || 443), dc: (s.dc || []).length};
+  }
+  const dcs = s.dc || [];
+  if (!dcs.length) return {addr: '—', dc: 0};
+  const main = s.mainDcId || 0;
+  let d = dcs.find(x => main && x.id === main) || dcs[0];
+  return {addr: d.host + ':' + (d.port || 443), dc: dcs.length};
+}
+
+function pingClass(s) {
+  if (s.pingMs === undefined || s.pingMs === null || s.pingMs < 0) return 'bad';
+  if (s.pingMs < 100) return 'good';
+  if (s.pingMs < 300) return 'warn';
+  return 'bad';
+}
+
 async function loadServers() {
   const box = document.getElementById('servers');
   try {
@@ -64,21 +92,43 @@ async function loadServers() {
     const d = await r.json();
     box.innerHTML = '';
     (d.servers || []).forEach(s => {
-      const dc = (s.dc || []).length;
+      const ep = endpointOf(s);
       const el = document.createElement('div');
       el.className = 'row';
-      el.style.marginBottom = '10px';
-      el.innerHTML =
-        '<span class="dot"></span>' +
-        '<span><span class="name"></span><br><span class="addr"></span></span>' +
-        '<span class="badge"></span>';
-      el.querySelector('.name').textContent = s.name || s.id;
-      el.querySelector('.addr').textContent = s.host + ':' + s.port + (dc ? '  ·  DC ' + dc : '');
-      el.querySelector('.badge').textContent = s.isTelegram ? 'Telegram · multi-DC' : 'single-DC';
-      if (s.isTelegram) el.querySelector('.badge').classList.add('tg');
+      const dot = document.createElement('span');
+      dot.className = 'dot' + (s.online === false ? ' bad' : (s.online === true ? '' : ' idle'));
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = s.name || s.id;
+      const ping = document.createElement('span');
+      ping.className = 'ping ' + pingClass(s);
+      ping.textContent = (s.pingMs === undefined || s.pingMs === null || s.pingMs < 0)
+        ? 'offline' : (s.pingMs + ' ms');
+      const badge = document.createElement('span');
+      badge.className = 'badge' + (s.isTelegram ? ' tg' : '');
+      badge.textContent = s.isTelegram ? 'Telegram · multi-DC' : 'single-DC';
+      const col = document.createElement('span');
+      col.style.minWidth = '0';
+      const addr = document.createElement('div');
+      addr.className = 'addr';
+      addr.textContent = ep.addr + (ep.dc > 1 ? '  ·  ' + ep.dc + ' DC' : (s.mainDcId ? '  ·  DC' + s.mainDcId : ''));
+      col.appendChild(addr);
+      if (s.description) {
+        const desc = document.createElement('div');
+        desc.className = 'desc';
+        desc.textContent = s.description;
+        col.appendChild(desc);
+      }
+      el.appendChild(dot);
+      el.appendChild(name);
+      el.appendChild(ping);
+      el.appendChild(col);
+      el.appendChild(badge);
       box.appendChild(el);
     });
     if (!box.children.length) box.innerHTML = '<div class="addr">серверов нет</div>';
+    document.getElementById('checked').textContent = d.checkedAt
+      ? 'пинг проверен: ' + d.checkedAt : '';
   } catch (e) {
     box.innerHTML = '<div class="addr">не удалось загрузить servers.json</div>';
   }
