@@ -8,6 +8,8 @@ name: Deploy site (gh-pages)
 on:
   push:
     branches: [gh-pages]
+  schedule:
+    - cron: '*/30 * * * *'
   workflow_dispatch:
   repository_dispatch:
     types: [deploy-site]
@@ -34,6 +36,18 @@ jobs:
         with:
           ref: gh-pages
           path: site
+
+      - name: Checkout scripts
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          path: scripts-src
+
+      - name: Ping servers
+        run: |
+          set -e
+          # меряем TCP-connect до каждого сервера и пишем pingMs/online прямо в servers.json
+          python3 scripts-src/scripts/ping_servers.py site/servers.json --timeout 3
 
       - name: Configure Pages
         id: pages

@@ -513,7 +513,7 @@ public class ServerSelectFragment extends BaseFragment {
 
         private final TextView nameTv;
         private final TextView endpointTv;
-        private final TextView statusTv;
+        private final TextView pingTv;
         private final View statusDot;
         private final TextView joinBtn;
 
@@ -550,35 +550,35 @@ public class ServerSelectFragment extends BaseFragment {
             LinearLayout textCol = new LinearLayout(context);
             textCol.setOrientation(LinearLayout.VERTICAL);
 
+            // Строка названия: зелёный/красный огонёк слева, название, рядом пинг.
+            LinearLayout nameRow = new LinearLayout(context);
+            nameRow.setOrientation(LinearLayout.HORIZONTAL);
+            nameRow.setGravity(Gravity.CENTER_VERTICAL);
+
+            statusDot = new View(context);
+            nameRow.addView(statusDot, LayoutHelper.createLinear(8, 8, Gravity.CENTER_VERTICAL, 0, 0, 7, 0));
+
             nameTv = new TextView(context);
             nameTv.setTextSize(15.5f);
             nameTv.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
             nameTv.setTypeface(AndroidUtilities.bold());
             nameTv.setSingleLine();
             nameTv.setEllipsize(TextUtils.TruncateAt.END);
-            textCol.addView(nameTv, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+            nameRow.addView(nameTv, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
+
+            pingTv = new TextView(context);
+            pingTv.setTextSize(12.5f);
+            pingTv.setSingleLine();
+            nameRow.addView(pingTv, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 7, 0, 0, 0));
+
+            textCol.addView(nameRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
             endpointTv = new TextView(context);
             endpointTv.setTextSize(13);
             endpointTv.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
             endpointTv.setSingleLine();
             endpointTv.setEllipsize(TextUtils.TruncateAt.MIDDLE);
-            textCol.addView(endpointTv, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 0));
-
-            // Status line: a coloured dot + status text.
-            LinearLayout statusRow = new LinearLayout(context);
-            statusRow.setOrientation(LinearLayout.HORIZONTAL);
-            statusRow.setGravity(Gravity.CENTER_VERTICAL);
-
-            statusDot = new View(context);
-            statusRow.addView(statusDot, LayoutHelper.createLinear(8, 8, Gravity.CENTER_VERTICAL, 0, 0, 7, 0));
-
-            statusTv = new TextView(context);
-            statusTv.setTextSize(12.5f);
-            statusTv.setSingleLine();
-            statusRow.addView(statusTv, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
-
-            textCol.addView(statusRow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 5, 0, 0));
+            textCol.addView(endpointTv, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 3, 0, 0));
 
             card.addView(textCol, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL));
 
@@ -617,26 +617,33 @@ public class ServerSelectFragment extends BaseFragment {
                     android.graphics.Shader.TileMode.CLAMP));
 
             nameTv.setText(server.name);
-            endpointTv.setText(server.host + ":" + server.port);
+            StringBuilder endpoint = new StringBuilder(server.host).append(":").append(server.port);
+            int dcCount = server.dc != null ? server.dc.size() : 0;
+            if (dcCount > 1) {
+                endpoint.append("  ·  ").append(dcCount).append(" DC");
+            } else if (server.mainDcId > 0) {
+                endpoint.append("  ·  DC").append(server.mainDcId);
+            }
+            endpointTv.setText(endpoint.toString());
 
             stopPulse();
             int dotColor;
             if (pingMs == null || pingMs == PING_CHECKING) {
                 dotColor = COLOR_IDLE;
-                statusTv.setText("Checking…");
-                statusTv.setTextColor(COLOR_IDLE);
+                pingTv.setText("Checking…");
+                pingTv.setTextColor(COLOR_IDLE);
                 statusDot.setBackground(Theme.createCircleDrawable(dp(8), dotColor));
                 startPulse();
             } else if (pingMs < 0) {
                 dotColor = COLOR_BAD;
-                statusTv.setText("Offline");
-                statusTv.setTextColor(COLOR_BAD);
+                pingTv.setText("Offline");
+                pingTv.setTextColor(COLOR_BAD);
                 statusDot.setAlpha(1f);
                 statusDot.setBackground(Theme.createCircleDrawable(dp(8), dotColor));
             } else {
                 dotColor = pingMs < 100 ? COLOR_GOOD : pingMs < 300 ? COLOR_WARN : COLOR_BAD;
-                statusTv.setText("Online · " + pingMs + " ms");
-                statusTv.setTextColor(dotColor);
+                pingTv.setText(pingMs + " ms");
+                pingTv.setTextColor(dotColor);
                 statusDot.setAlpha(1f);
                 statusDot.setBackground(Theme.createCircleDrawable(dp(8), dotColor));
             }
