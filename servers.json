@@ -51,7 +51,10 @@
       "multiDc": false,
       "mainDcId": 2,
       "rsaPublicKey": "-----BEGIN RSA PUBLIC KEY-----\nMIIBCgKCAQEAtjWhUFH6KfmrdFySSb3CORowbtVEB1fZd4Cr1eOtAxXFEJcfioy5\np+v4R0LyQmXUH4FcsBT50ECWwj6BdGgpQSprZD51jD+kLVf56/tpGC20kOQyJgmK\n1NnLzVxCao3eMEPC2ZXlgLpB3Q37a+SnhX6zhLvyVJEfs5uom58r9A46K2e8T1Cz\n/UNWWQLMPxN0jt/Xdwz/J3rcggMnVxJ1O+V3RFl9f07Ur+pqFG0mVxRUxKF38N31\n9Wfimwq6syGSaKL4ZoOyGf6v/vqzC4qgb2vMtfmlJ1GDNfpUQjaDo4t/NAIHmhH6\nErfaWIm9PgvRoEGc/YII5DfYRiuj4uFC3wIDAQAB\n-----END RSA PUBLIC KEY-----",
-      "rsaKeyFingerprint": 3032521678109677549
+      "rsaKeyFingerprint": 3032521678109677549,
+      "pingMs": 165,
+      "online": true
     }
-  ]
+  ],
+  "checkedAt": "2026-10-22T16:58:32Z"
 }
