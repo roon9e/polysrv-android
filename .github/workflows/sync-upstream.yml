@@ -120,22 +120,22 @@ jobs:
           fi
 
       - name: Checkout upstream tree
-        if: steps.fetch.outputs.up_to_date != 'true'
+        if: ${{ steps.opts.outputs.build_apk == 'true' || steps.fetch.outputs.up_to_date != 'true' }}
         run: |
           rm -rf /tmp/upstream
           git worktree add --detach /tmp/upstream FETCH_HEAD
           ls /tmp/upstream | head
 
       - name: Check that our changes still apply
-        if: steps.fetch.outputs.up_to_date != 'true'
+        if: ${{ steps.opts.outputs.build_apk == 'true' || steps.fetch.outputs.up_to_date != 'true' }}
         run: python3 scripts/patch_polysrv.py --target /tmp/upstream --check --strict
 
       - name: Apply our changes
-        if: steps.fetch.outputs.up_to_date != 'true'
+        if: ${{ steps.opts.outputs.build_apk == 'true' || steps.fetch.outputs.up_to_date != 'true' }}
         run: python3 scripts/patch_polysrv.py --target /tmp/upstream
 
       - name: Verify no changes were lost
-        if: steps.fetch.outputs.up_to_date != 'true'
+        if: ${{ steps.opts.outputs.build_apk == 'true' || steps.fetch.outputs.up_to_date != 'true' }}
         run: |
           # ключевые наши куски должны присутствовать в итоговом дереве
           set -e
