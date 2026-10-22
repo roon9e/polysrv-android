@@ -106,6 +106,7 @@ jobs:
           # fallback на HEAD — если апстрим переименует ветку master.
           git fetch --depth=1 --no-tags upstream master || git fetch --depth=1 --no-tags upstream HEAD
           NEW_SHA=$(git rev-parse FETCH_HEAD)
+          echo "sha=$NEW_SHA" >> "$GITHUB_OUTPUT"
           echo "upstream commit: $NEW_SHA"
           git log -1 --format='upstream date: %ci  subject: %s' FETCH_HEAD
           # Ранняя проверка: если мы уже синхронизировались с этим SHA — делать нечего
@@ -152,8 +153,8 @@ jobs:
           set -e
           cd /tmp/upstream
           BRANCH="${{ steps.opts.outputs.branch }}"
-          # SHA апстрима сохраняем заранее: git fetch origin "$BRANCH" ниже перезапишет FETCH_HEAD
-          UPSTREAM_SHA=$(git rev-parse FETCH_HEAD)
+          # SHA апстрима берём из output шага Fetch upstream: в worktree свой FETCH_HEAD
+          UPSTREAM_SHA="${{ steps.fetch.outputs.sha }}"
           # worktree — часть нашего репозитория, коммит уходит прямо в него
           git checkout -B "$BRANCH" "$UPSTREAM_SHA"
           # .github (workflow-файлы) в ветку синхронизации не кладём:
