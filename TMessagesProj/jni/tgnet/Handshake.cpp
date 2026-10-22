@@ -348,11 +348,12 @@ uint64_t Handshake::calculatePublicKeyFingerprint(const std::string &pem) {
     BN_bn2bin(n, nBuf.data());
     BN_bn2bin(e, eBuf.data());
 
-    // TL-сериализация bytes(n) + bytes(e), затем SHA1; фингерпринт — нижние
-    // 64 бита (последние 8 байт, little-endian) дайджеста.
+    // Сервер (gotd/td) считает SHA1 от СЫРЫХ байтов n и e, без TL-длины
+    // (bin.Buffer.PutBytes). Поэтому пишем именно writeBytes, а не writeByteArray
+    // (тот добавляет префикс длины и ломает совпадение фингерпринта).
     NativeByteBuffer *buffer = BuffersStorage::getInstance().getFreeBuffer((uint32_t) (nLen + eLen + 16));
-    buffer->writeByteArray(nBuf.data(), (uint32_t) nLen, nullptr);
-    buffer->writeByteArray(eBuf.data(), (uint32_t) eLen, nullptr);
+    buffer->writeBytes(nBuf.data(), (uint32_t) nLen, nullptr);
+    buffer->writeBytes(eBuf.data(), (uint32_t) eLen, nullptr);
 
     uint8_t sha1Buffer[20];
     SHA1(buffer->bytes(), buffer->position(), sha1Buffer);
