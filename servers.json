@@ -5,7 +5,6 @@
     {
       "id": "telegram",
       "name": "Telegram",
-      "description": "Official Telegram cloud. Sign in with your Telegram account.",
       "isTelegram": true,
       "multiDc": true,
       "mainDcId": 2,
@@ -37,7 +36,10 @@
           "host": "149.154.171.5",
           "port": 443
         }
-      ]
+      ],
+      "pingManual": true,
+      "online": true,
+      "pingMs": 60
     }
   ]
 }

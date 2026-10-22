@@ -51,6 +51,10 @@ def main():
         data = json.load(f)
 
     for s in data.get("servers", []):
+        if s.get("pingManual"):
+            # значение задано вручную (например, сервер недоступен с CI-раннера)
+            print(f"  {s.get('name') or s.get('id')}: ручной пинг, пропускаем")
+            continue
         host, port = resolve_endpoint(s)
         if not host:
             continue
