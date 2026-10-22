@@ -1,0 +1,49 @@
+name: Deploy site (gh-pages)
+
+# Деплоит статический сайт PolySrv (ветка gh-pages: index.html, servers.json, update.json)
+# на GitHub Pages: https://roon9e.github.io/polysrv-android/
+#
+# Запускается автоматически при изменении ветки gh-pages, а также вручную.
+
+on:
+  push:
+    branches: [gh-pages]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [deploy-site]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout site
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

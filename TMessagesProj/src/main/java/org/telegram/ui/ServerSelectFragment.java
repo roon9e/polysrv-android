@@ -30,6 +30,7 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
+import org.telegram.messenger.browser.Browser;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.LayoutHelper;
@@ -58,6 +59,7 @@ public class ServerSelectFragment extends BaseFragment {
     private static final int TYPE_SERVER  = 1;
     private static final int TYPE_ADD     = 2;
     private static final int TYPE_SPACER  = 3;
+    private static final int TYPE_UPDATE  = 4;
 
     private static final int[] AVATAR_COLORS = {
         0xFFE53935, 0xFFE64A19, 0xFF43A047,
@@ -215,6 +217,9 @@ public class ServerSelectFragment extends BaseFragment {
         }
 
         rows.add("add");
+        if (PolySrvServers.hasNewerVersion()) {
+            rows.add("update");
+        }
         rows.add("spacer");
         return rows;
     }
@@ -230,6 +235,11 @@ public class ServerSelectFragment extends BaseFragment {
                 reloadServers();
                 pingServer(saved);
             }));
+        } else if ("update".equals(o)) {
+            String url = PolySrvServers.getLatestApkUrl();
+            if (!TextUtils.isEmpty(url)) {
+                Browser.openUrl(getParentActivity() != null ? getParentActivity() : getContext(), url);
+            }
         }
     }
 
@@ -341,6 +351,7 @@ public class ServerSelectFragment extends BaseFragment {
             Object o = buildRows().get(position);
             if (o instanceof PolySrvServer) return TYPE_SERVER;
             if ("add".equals(o)) return TYPE_ADD;
+            if ("update".equals(o)) return TYPE_UPDATE;
             if ("spacer".equals(o)) return TYPE_SPACER;
             return TYPE_HEADER;
         }
@@ -350,6 +361,7 @@ public class ServerSelectFragment extends BaseFragment {
             switch (type) {
                 case TYPE_SERVER: return new ServerHolder(new ServerCell(context));
                 case TYPE_ADD:    return new SimpleHolder(buildAddCell(context));
+                case TYPE_UPDATE: return new SimpleHolder(buildUpdateCell(context));
                 case TYPE_HEADER: return new HeaderHolder(buildHeader(context));
                 default:          return new SimpleHolder(buildSpacer(context));
             }
@@ -414,6 +426,40 @@ public class ServerSelectFragment extends BaseFragment {
         List<Object> rows = buildRows();
         for (int i = 0; i < rows.size(); i++) {
             if ("add".equals(rows.get(i))) return i;
+        }
+        return -1;
+    }
+
+    private View buildUpdateCell(Context context) {
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(20), dp(6), dp(20), dp(6));
+
+        TextView tv = new TextView(context);
+        tv.setText("⬇  Скачать новую версию");
+        tv.setTextSize(15);
+        tv.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText));
+        tv.setTypeface(AndroidUtilities.bold());
+        tv.setGravity(Gravity.CENTER);
+        tv.setMinimumHeight(dp(52));
+        tv.setPadding(dp(16), 0, dp(16), 0);
+        tv.setBackground(Theme.createSimpleSelectorRoundRectDrawable(
+                dp(14),
+                Theme.getColor(Theme.key_windowBackgroundWhite),
+                Theme.getColor(Theme.key_listSelector)));
+        tv.setOnClickListener(v -> onRowClick(updateRowPosition()));
+        row.addView(tv, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 52, Gravity.CENTER_VERTICAL));
+
+        row.setLayoutParams(new RecyclerView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return row;
+    }
+
+    private int updateRowPosition() {
+        List<Object> rows = buildRows();
+        for (int i = 0; i < rows.size(); i++) {
+            if ("update".equals(rows.get(i))) return i;
         }
         return -1;
     }

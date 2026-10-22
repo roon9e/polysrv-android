@@ -140,6 +140,88 @@ public class PolySrvServers {
     }
 
     /**
+     * Информация о последней сборке: с сайта (update.json).
+     * Хранится в кэше, чтобы показать ссылку на APK даже офлайн.
+     */
+    public static final String KEY_UPDATE_CACHE = "servers_update_json";
+
+    public static JSONObject getUpdateInfo() {
+        try {
+            String cached = getPrefs().getString(KEY_UPDATE_CACHE, null);
+            if (TextUtils.isEmpty(cached)) {
+                return null;
+            }
+            return new JSONObject(cached);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Ссылка на APK последней сборки (если сервер её отдаёт). */
+    public static String getLatestApkUrl() {
+        JSONObject info = getUpdateInfo();
+        if (info == null) {
+            return null;
+        }
+        return info.optString("apkUrl", null);
+    }
+
+    /** true, если на сайте есть сборка новее установленной. */
+    public static boolean hasNewerVersion() {
+        JSONObject info = getUpdateInfo();
+        if (info == null) {
+            return false;
+        }
+        long remote = info.optLong("versionCode", 0);
+        if (remote <= 0) {
+            return false;
+        }
+        try {
+            int current = ApplicationLoader.applicationContext.getPackageManager()
+                    .getPackageInfo(ApplicationLoader.applicationContext.getPackageName(), 0).versionCode;
+            return remote > current;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Скачивает update.json с сайта (в фоне) и кэширует. */
+    public static void refreshUpdateInfo() {
+        final String url = BuildConfig.SERVERS_CONFIG_URL;
+        if (TextUtils.isEmpty(url)) {
+            return;
+        }
+        // update.json лежит рядом с servers.json
+        final String updateUrl = url.substring(0, url.lastIndexOf('/') + 1) + "update.json";
+        new Thread(() -> {
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new URL(updateUrl).openConnection();
+                conn.setConnectTimeout(BuildConfig.SERVERS_CONFIG_TIMEOUT_MS);
+                conn.setReadTimeout(BuildConfig.SERVERS_CONFIG_TIMEOUT_MS);
+                conn.setRequestProperty("Cache-Control", "no-cache");
+                conn.connect();
+                if (conn.getResponseCode() == 200) {
+                    InputStream is = conn.getInputStream();
+                    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[4096];
+                    int len;
+                    while ((len = is.read(buf)) > 0) {
+                        bos.write(buf, 0, len);
+                    }
+                    is.close();
+                    String text = new String(bos.toByteArray());
+                    if (text.trim().startsWith("{")) {
+                        getPrefs().edit().putString(KEY_UPDATE_CACHE, text).apply();
+                    }
+                }
+                conn.disconnect();
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        }, "polysrv-update").start();
+    }
+
+    /**
      * Достаёт JSON конфига из ответа: либо файл сам является JSON, либо это .env
      * с переменной SERVERS_JSON=... (значение может быть в кавычках).
      */
