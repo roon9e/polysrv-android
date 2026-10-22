@@ -192,6 +192,7 @@ jobs:
   build:
     name: Build ${{ matrix.abi }}
     needs: sync
+    if: needs.sync.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
@@ -262,6 +263,7 @@ jobs:
   package:
     name: Package universal APK
     needs: [sync, build]
+    if: needs.sync.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
