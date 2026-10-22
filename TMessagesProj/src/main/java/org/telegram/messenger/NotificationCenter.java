@@ -290,6 +290,7 @@ public class NotificationCenter {
 
     //global
     public static final int activeAccountChanged = totalEvents++;
+    public static final int polysrvServersUpdated = totalEvents++;
     public static final int pushMessagesUpdated = totalEvents++;
     public static final int wallpapersDidLoad = totalEvents++;
     public static final int wallpapersNeedReload = totalEvents++;

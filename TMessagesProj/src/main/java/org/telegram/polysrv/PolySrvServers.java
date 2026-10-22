@@ -12,9 +12,11 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import android.text.TextUtils;
 
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.ConnectionsManager;
 
@@ -97,13 +99,17 @@ public class PolySrvServers {
             urls.add(BuildConfig.SERVERS_CONFIG_URL_FALLBACK);
         }
         if (urls.isEmpty()) {
-            if (onDone != null) onDone.run();
+            if (onDone != null) {
+                AndroidUtilities.runOnUIThread(onDone);
+            }
             return;
         }
         new Thread(() -> {
             for (String url : urls) {
                 try {
-                    HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                    // cache-busting: иначе CDN отдаёт старый файл из кэша
+                String urlWithTs = url + (url.contains("?") ? "&" : "?") + "_t=" + System.currentTimeMillis();
+                HttpURLConnection conn = (HttpURLConnection) new URL(urlWithTs).openConnection();
                     conn.setConnectTimeout(BuildConfig.SERVERS_CONFIG_TIMEOUT_MS);
                     conn.setReadTimeout(BuildConfig.SERVERS_CONFIG_TIMEOUT_MS);
                     conn.setRequestProperty("Cache-Control", "no-cache");
@@ -134,7 +140,8 @@ public class PolySrvServers {
                 }
             }
             if (onDone != null) {
-                onDone.run();
+                // колбэк трогает UI — обязательно в главном потоке
+                AndroidUtilities.runOnUIThread(onDone);
             }
         }, "polysrv-config").start();
     }
@@ -185,6 +192,33 @@ public class PolySrvServers {
         }
     }
 
+    /**
+     * Периодически обновляет список серверов с сайта, пока приложение живо.
+     * Список на экране обновляется сразу после очередного успешного запроса.
+     */
+    public static void startConfigPolling(final java.util.concurrent.atomic.AtomicLong lastUpdate) {
+        final long period = 5 * 60 * 1000L;
+        android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                refreshConfigFromNetwork(new Runnable() {
+                    @Override
+                    public void run() {
+                        long now = System.currentTimeMillis();
+                        if (lastUpdate.get() != 0 && now - lastUpdate.get() > 30 * 1000L) {
+                            lastUpdate.set(now);
+                            AndroidUtilities.runOnUIThread(() ->
+                                    NotificationCenter.getGlobalInstance()
+                                            .postNotificationName(NotificationCenter.polysrvServersUpdated, 0));
+                        }
+                    }
+                });
+                handler.postDelayed(this, period);
+            }
+        }, period);
+    }
+
     /** Скачивает update.json с сайта (в фоне) и кэширует. */
     public static void refreshUpdateInfo() {
         final String url = BuildConfig.SERVERS_CONFIG_URL;
@@ -195,7 +229,8 @@ public class PolySrvServers {
         final String updateUrl = url.substring(0, url.lastIndexOf('/') + 1) + "update.json";
         new Thread(() -> {
             try {
-                HttpURLConnection conn = (HttpURLConnection) new URL(updateUrl).openConnection();
+                String updateUrlWithTs = updateUrl + (updateUrl.contains("?") ? "&" : "?") + "_t=" + System.currentTimeMillis();
+                HttpURLConnection conn = (HttpURLConnection) new URL(updateUrlWithTs).openConnection();
                 conn.setConnectTimeout(BuildConfig.SERVERS_CONFIG_TIMEOUT_MS);
                 conn.setReadTimeout(BuildConfig.SERVERS_CONFIG_TIMEOUT_MS);
                 conn.setRequestProperty("Cache-Control", "no-cache");

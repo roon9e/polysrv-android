@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.UserConfig;
 import org.telegram.polysrv.PolySrvServer;
 import org.telegram.polysrv.PolySrvServers;
@@ -139,6 +140,7 @@ public class ServerSelectFragment extends BaseFragment {
     @Override
     public void onFragmentDestroy() {
         destroyed = true;
+        NotificationCenter.getGlobalInstance().removeObserver(serversObserver, NotificationCenter.polysrvServersUpdated);
         if (connectPoll != null) uiHandler.removeCallbacks(connectPoll);
         pingPool.shutdownNow();
         super.onFragmentDestroy();
@@ -150,6 +152,31 @@ public class ServerSelectFragment extends BaseFragment {
         servers.clear();
         servers.addAll(PolySrvServers.listServers());
         if (adapter != null) adapter.notifyDataSetChanged();
+    }
+
+    private final NotificationCenter.NotificationCenterDelegate serversObserver = (id, account, args) -> {
+        if (id == NotificationCenter.polysrvServersUpdated) {
+            reloadServers();
+            for (PolySrvServer s : servers) {
+                pingServer(s);
+            }
+        }
+    };
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        NotificationCenter.getGlobalInstance().addObserver(serversObserver, NotificationCenter.polysrvServersUpdated);
+        // Список серверов подтягиваем с сайта каждый раз при открытии экрана
+        PolySrvServers.refreshConfigFromNetwork(new Runnable() {
+            @Override
+            public void run() {
+                reloadServers();
+                for (PolySrvServer s : servers) {
+                    pingServer(s);
+                }
+            }
+        });
     }
 
     // --- Ping ---
