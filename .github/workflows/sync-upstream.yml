@@ -152,15 +152,17 @@ jobs:
           set -e
           cd /tmp/upstream
           BRANCH="${{ steps.opts.outputs.branch }}"
+          # SHA апстрима сохраняем заранее: git fetch origin "$BRANCH" ниже перезапишет FETCH_HEAD
+          UPSTREAM_SHA=$(git rev-parse FETCH_HEAD)
           # worktree — часть нашего репозитория, коммит уходит прямо в него
-          git checkout -B "$BRANCH" FETCH_HEAD
+          git checkout -B "$BRANCH" "$UPSTREAM_SHA"
           # .github (workflow-файлы) в ветку синхронизации не кладём:
           # дефолтный GITHUB_TOKEN не имеет права менять workflow-файлы,
           # и такой push отклоняется GitHub'ом.
           git rm -r -q --cached .github 2>/dev/null || true
           rm -rf .github
           # запоминаем, с какого апстрима синхронизировались (для ранней проверки)
-          echo "$(git rev-parse FETCH_HEAD)" > .upstream-sha
+          echo "$UPSTREAM_SHA" > .upstream-sha
           git add -A
           # Сравниваем ИТОГОВОЕ ДЕРЕВО с удалённой веткой: если оно идентично —
           # ничего не коммитим и PR не открываем.
@@ -172,7 +174,7 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
-              commit -m "chore: sync with upstream DrKLO/Telegram $(git rev-parse --short FETCH_HEAD)"
+              commit -m "chore: sync with upstream DrKLO/Telegram $(git rev-parse --short "$UPSTREAM_SHA")"
             git push --force-with-lease origin "$BRANCH"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
