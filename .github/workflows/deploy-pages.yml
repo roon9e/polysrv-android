@@ -38,6 +38,9 @@ jobs:
       - name: Configure Pages
         id: pages
         uses: actions/configure-pages@v5
+        with:
+          # включить Pages автоматически, если есть права (иначе — включи вручную)
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
