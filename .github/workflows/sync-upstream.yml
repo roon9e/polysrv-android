@@ -110,7 +110,7 @@ jobs:
           echo "upstream commit: $NEW_SHA"
           git log -1 --format='upstream date: %ci  subject: %s' FETCH_HEAD
           # Ранняя проверка: если мы уже синхронизировались с этим SHA — делать нечего
-          LAST_SHA=$(git show "origin/${{ steps.opts.outputs.branch }}:.upstream-sha" 2>/dev/null | tr -d '[:space:]' || true)
+          LAST_SHA=$(git ls-remote --tags origin refs/tags/upstream-synced 2>/dev/null | cut -f1 | tr -d '[:space:]' || true)
           echo "last synced: ${LAST_SHA:-<нет>}"
           if [ -n "$LAST_SHA" ] && [ "$LAST_SHA" = "$NEW_SHA" ] && [ "${{ steps.opts.outputs.force }}" != "true" ]; then
             echo "апстрим не изменился — синхронизация не требуется"
@@ -177,7 +177,14 @@ jobs:
             git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
               commit -m "chore: sync with upstream DrKLO/Telegram $(git rev-parse --short "$UPSTREAM_SHA")"
             git push --force-with-lease origin "$BRANCH"
+            # тег с SHA апстрима: по нему следующий прогой поймёт, что синхронизироваться не нужно
+            git tag -f upstream-synced "$UPSTREAM_SHA"
+            git push --force origin refs/tags/upstream-synced
             echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            # дерево не изменилось, но запоминаем SHA, чтобы больше не патчить
+            git tag -f upstream-synced "$UPSTREAM_SHA"
+            git push --force origin refs/tags/upstream-synced
           fi
           # Освобождаем ветку: экшен create-pull-request делает git checkout этой ветки,
           # а она занята нашим worktree -> git падает с "already used by worktree".
