@@ -1,0 +1,74 @@
+name: Update polysrv_edits.json
+
+# Пересобирает scripts/polysrv_edits.json после каждого коммита в master:
+# список наших правок должен всегда соответствовать текущему коду, иначе
+# sync-upstream.yml падает на шаге "Check that polysrv_edits.json is up to date",
+# а в сборку уезжает устаревший набор замен.
+#
+# Запуск: автоматически на push в master + вручную (Run workflow).
+
+on:
+  push:
+    branches: [master]
+    # Коммит самого бота меняет только этот файл — иначе был бы бесконечный цикл.
+    paths-ignore:
+      - 'scripts/polysrv_edits.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-polysrv-edits
+  cancel-in-progress: true
+
+jobs:
+  update:
+    name: Regenerate polysrv_edits.json
+    runs-on: ubuntu-latest
+    # Дополнительная защита от циклов, если paths-ignore когда-нибудь уберут.
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Нужна вся история: генератор делает git diff <base>..HEAD,
+          # а base по умолчанию — старый коммит апстрима.
+          fetch-depth: 0
+
+      - name: Regenerate
+        run: python3 scripts/generate_polysrv_edits.py
+
+      - name: Commit and push if changed
+        run: |
+          set -e
+          if git diff --quiet -- scripts/polysrv_edits.json; then
+            echo "polysrv_edits.json актуален — коммит не нужен"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add scripts/polysrv_edits.json
+          git commit -m "Обновлён polysrv_edits.json"
+
+          # Пока шёл workflow, в master мог прилететь другой push — тогда
+          # перебазируемся и генерируем заново, чтобы список правок был от свежего HEAD.
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "готово (попытка $attempt)"
+              exit 0
+            fi
+            echo "push отклонён (попытка $attempt) — подтягиваем master и пробуем снова"
+            git pull --rebase origin master
+            python3 scripts/generate_polysrv_edits.py
+            if git diff --quiet -- scripts/polysrv_edits.json; then
+              echo "после rebase список уже актуален — коммит не нужен"
+              exit 0
+            fi
+            git add scripts/polysrv_edits.json
+            git commit -m "Обновлён polysrv_edits.json" --amend
+            sleep 5
+          done
+          echo "не удалось запушить за 3 попытки"
+          exit 1

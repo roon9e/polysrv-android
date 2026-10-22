@@ -51,3 +51,8 @@ python3 scripts/patch_polysrv.py --target /tmp/tg --check --strict
 python3 scripts/generate_polysrv_edits.py [base_commit]
 # base_commit по умолчанию — upstream 13.0.3 (7183)
 ```
+
+Вручную обычно не нужно: воркфлоу `.github/workflows/update-polysrv-edits.yml`
+пересобирает файл на каждый push в `master` и сам коммитит результат
+(коммит `Обновлён polysrv_edits.json`). Коммит бота не запускает воркфлоу снова,
+поэтому цикла нет. Если файл не изменился — коммита не будет.
