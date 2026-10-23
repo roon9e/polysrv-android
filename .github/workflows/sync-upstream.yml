@@ -7,8 +7,9 @@ name: Sync upstream
 # Запуск: вкладка Actions -> Sync upstream -> Run workflow.
 # Или автоматически каждые 6 часов.
 #
-# Результат всегда коммитится в ветку `branch` (по умолчанию upstream-sync),
-# PR автоматически не открывается — его можно открыть вручную из этой ветки.
+# Результат коммитится в ветку `branch` (по умолчанию upstream-sync), если включён
+# переключатель `commit_result`. PR автоматически не открывается — его можно
+# открыть вручную из этой ветки.
 #
 # Если апстрим не изменился — воркфлоу заканчивается сразу, без патча/сборки.
 # Сборка идёт в матрице: каждый ABI собирается в своём job'е (параллельно),
@@ -24,9 +25,13 @@ on:
         type: boolean
         default: true
       branch:
-        description: 'Ветка для результата (по умолчанию upstream-sync)'
+        description: 'Ветка'
         type: string
         default: 'upstream-sync'
+      commit_result:
+        description: 'Коммитить результат в ветку (выключи, если нужна только сборка)'
+        type: boolean
+        default: true
       fast_build:
         description: 'Быстрая сборка: только arm64-v8a (в ~4 раза быстрее, APK без других архитектур)'
         type: boolean
@@ -69,9 +74,10 @@ jobs:
             echo "build_apk=$([ "${{ inputs.build_apk }}" = "false" ] && echo false || echo true)"
             echo "fast_build=$([ "${{ inputs.fast_build }}" = "true" ] && echo true || echo false)"
             echo "force=$([ "${{ inputs.force }}" = "true" ] && echo true || echo false)"
+            echo "commit=$([ "${{ inputs.commit_result }}" = "false" ] && echo false || echo true)"
             echo "branch=${{ inputs.branch || 'upstream-sync' }}"
           } >> $GITHUB_OUTPUT
-          echo "build_apk=${{ steps.opts.outputs.build_apk }} fast_build=${{ steps.opts.outputs.fast_build }} branch=${{ steps.opts.outputs.branch }}"
+          echo "build_apk=${{ steps.opts.outputs.build_apk }} fast_build=${{ steps.opts.outputs.fast_build }} commit=${{ steps.opts.outputs.commit }} branch=${{ steps.opts.outputs.branch }}"
 
       - name: Check that polysrv_edits.json is up to date
         run: |
@@ -138,7 +144,7 @@ jobs:
 
       - name: Commit result
         id: commit
-        if: ${{ steps.fetch.outputs.up_to_date != 'true' && steps.opts.outputs.branch != '' }}
+        if: ${{ steps.fetch.outputs.up_to_date != 'true' && steps.opts.outputs.commit == 'true' && steps.opts.outputs.branch != '' }}
         run: |
           set -e
           cd /tmp/upstream
