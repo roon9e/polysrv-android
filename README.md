@@ -1,5 +1,7 @@
 # [PolySRV][polysrv] – Multiserver Messenger for Android
 
+**One familiar app. Any MTProto server you trust.**
+
 **PolySRV** is a fork of the official [Telegram for Android][telegram_android] source code,
 based on the [Telegram API][telegram_api] and the [MTProto][telegram_proto] secure protocol.
 
@@ -8,8 +10,18 @@ MTProto servers**: pick one on the login screen, or add your own by address and 
 The server list is not hardcoded — it is loaded from a remote JSON file, so servers can be
 added, removed or re-pinged without shipping a new APK.
 
+> 🔗 Built on **MTProto API layer 231**.
+
 [![Build](https://github.com/roon9e/polysrv-android/actions/workflows/sync-upstream.yml/badge.svg)](https://github.com/roon9e/polysrv-android/actions/workflows/sync-upstream.yml)
 [![License](https://img.shields.io/badge/license-GPLv2-blue.svg)](LICENSE)
+
+## Why you'll like it
+
+* 🌐 **Multiservers** — the official network, your own server, or any community node.
+* 🧩 **Server list from the CDN** — edit `servers.json` and the app picks it up, no rebuild.
+* 🏠 **Your own infrastructure** — self-hosted MTProto servers are first-class citizens.
+* 👥 **Clean isolation** — accounts, sessions and caches are separated per server.
+* 🆓 **Open source** — read it, audit it, build it yourself.
 
 ## Multiservers
 
@@ -121,8 +133,14 @@ this fork keeps their copyright notices intact.
 ## Thanks to
 
 * [DrKLO/Telegram][upstream] — the official Telegram for Android sources this project is based on.
+* [**OwpenGram Android**](https://github.com/owpengram/owpengram-android-client) — for the idea of a
+  multiservers Android client on top of the open Telegram sources.
 * The Telegram Desktop and TDLib teams — for the protocol documentation and reference implementations.
 * GitHub Actions — for the runners that sync, ping and build everything.
+
+---
+
+⭐ If PolySRV is useful to you, a star on GitHub helps a lot.
 
 [//]: # (LINKS)
 [polysrv]: https://roon9e.github.io/polysrv-android/
