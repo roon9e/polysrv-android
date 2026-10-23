@@ -115,23 +115,35 @@ jobs:
             echo "up_to_date=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Кеш готового пропатченного дерева ВМЕСТЕ с сабмодулями (~700 МБ tar).
+      # Ключ = SHA апстрима + хеш наших правок и конфигов: пока ничего не менялось,
+      # не тратим ~2.5 минуты на git submodule update и упаковку.
+      # Не используем, когда нужно коммитить новый апстрим (нужен живой worktree).
+      - name: Restore patched source cache
+        id: srccache
+        if: ${{ steps.opts.outputs.build_apk == 'true' && (steps.opts.outputs.commit != 'true' || steps.fetch.outputs.up_to_date == 'true') }}
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/upstream-src.tar.gz
+          key: patched-src-${{ steps.fetch.outputs.sha }}-${{ hashFiles('scripts/polysrv_edits.json', 'scripts/patch_polysrv.py', 'servers.env', 'gradle.properties') }}
+
       - name: Checkout upstream tree
-        if: ${{ steps.opts.outputs.build_apk == 'true' || steps.fetch.outputs.up_to_date != 'true' }}
+        if: ${{ steps.srccache.outputs.cache-hit != 'true' && (steps.opts.outputs.build_apk == 'true' || steps.fetch.outputs.up_to_date != 'true') }}
         run: |
           rm -rf /tmp/upstream
           git worktree add --detach /tmp/upstream FETCH_HEAD
           ls /tmp/upstream | head
 
       - name: Check that our changes still apply
-        if: ${{ steps.opts.outputs.build_apk == 'true' || steps.fetch.outputs.up_to_date != 'true' }}
+        if: ${{ steps.srccache.outputs.cache-hit != 'true' && (steps.opts.outputs.build_apk == 'true' || steps.fetch.outputs.up_to_date != 'true') }}
         run: python3 scripts/patch_polysrv.py --target /tmp/upstream --check --strict
 
       - name: Apply our changes
-        if: ${{ steps.opts.outputs.build_apk == 'true' || steps.fetch.outputs.up_to_date != 'true' }}
+        if: ${{ steps.srccache.outputs.cache-hit != 'true' && (steps.opts.outputs.build_apk == 'true' || steps.fetch.outputs.up_to_date != 'true') }}
         run: python3 scripts/patch_polysrv.py --target /tmp/upstream
 
       - name: Verify no changes were lost
-        if: ${{ steps.opts.outputs.build_apk == 'true' || steps.fetch.outputs.up_to_date != 'true' }}
+        if: ${{ steps.srccache.outputs.cache-hit != 'true' && (steps.opts.outputs.build_apk == 'true' || steps.fetch.outputs.up_to_date != 'true') }}
         run: |
           # ключевые наши куски должны присутствовать в итоговом дереве
           set -e
@@ -182,7 +194,7 @@ jobs:
           git checkout --detach
 
       - name: Init submodules
-        if: ${{ steps.opts.outputs.build_apk == 'true' }}
+        if: ${{ steps.opts.outputs.build_apk == 'true' && steps.srccache.outputs.cache-hit != 'true' }}
         working-directory: /tmp/upstream
         run: |
           set -e
@@ -190,12 +202,19 @@ jobs:
           git submodule status | head -25
 
       - name: Pack patched source (with submodules)
-        if: ${{ steps.opts.outputs.build_apk == 'true' }}
+        if: ${{ steps.opts.outputs.build_apk == 'true' && steps.srccache.outputs.cache-hit != 'true' }}
         run: |
           set -e
           # пакуем дерево вместе с сабмодулями (~1 ГБ), чтобы build-джобы не качали их каждый
           tar --exclude=.git --exclude=build --exclude=.cxx -czf /tmp/upstream-src.tar.gz -C /tmp upstream
           ls -lh /tmp/upstream-src.tar.gz
+
+      - name: Save patched source cache
+        if: ${{ steps.opts.outputs.build_apk == 'true' && steps.srccache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/upstream-src.tar.gz
+          key: ${{ steps.srccache.outputs.cache-primary-key }}
 
       - name: Upload patched source
         if: ${{ steps.opts.outputs.build_apk == 'true' }}
