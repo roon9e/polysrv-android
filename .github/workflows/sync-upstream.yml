@@ -233,6 +233,14 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Кеш Gradle: зависимости + локальный build-cache (Java-компиляция, R8 и т.п.)
+      - name: Set up Gradle caches
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+          # build-cache хранится внутри ~/.gradle/caches, чистим только мусор
+          gradle-home-cache-cleanup: true
+
       - name: Set up Android SDK
         run: |
           set -e
@@ -254,13 +262,54 @@ jobs:
             "platform-tools" "platforms;android-36" "build-tools;36.0.0" \
             "ndk;27.2.12479018" "cmake;3.22.1"
 
+      # Хеш исходников натива — ключ кеша ccache: при неизменном апстриме
+      # кеш восстанавливается точно, при изменении подтягиваем предыдущий
+      # (ccache всё равно матчит объектники по содержимому).
+      - name: Source hash for ccache
+        id: srchash
+        run: |
+          set -e
+          H=$(cd /tmp/upstream && \
+              find TMessagesProj/jni TMessagesProj/build.gradle TMessagesProj_App/build.gradle \
+                   gradle.properties -type f -print0 2>/dev/null \
+              | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+          echo "hash=$H" >> "$GITHUB_OUTPUT"
+          echo "исходники натива: $H"
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ matrix.abi }}-${{ steps.srchash.outputs.hash }}
+          restore-keys: |
+            ccache-${{ matrix.abi }}-
+
+      - name: Set up ccache
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ccache
+          {
+            echo "CCACHE_DIR=$HOME/.ccache"
+            echo "CCACHE_BASEDIR=/tmp/upstream"
+            echo "CCACHE_NOHASHDIR=true"
+            echo "CCACHE_COMPRESS=true"
+            echo "CCACHE_COMPRESSLEVEL=6"
+            echo "CCACHE_MAXSIZE=2G"
+            echo "CCACHE_SLOPPINESS=include_file_ctime,include_file_mtime,time_macros,file_stat_matches"
+            echo "USE_CCACHE=1"
+          } >> $GITHUB_ENV
+          ccache --version | head -1
+
       - name: Build APK (${{ matrix.abi }})
         working-directory: /tmp/upstream
         run: |
           set -e
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           chmod +x gradlew
-          ./gradlew :TMessagesProj_App:assembleAfatRelease -PabiFilters=${{ matrix.abi }} --stacktrace
+          ./gradlew :TMessagesProj_App:assembleAfatRelease -PabiFilters=${{ matrix.abi }} --build-cache --stacktrace
+          echo "=== ccache ==="
+          ccache -s || true
 
       - name: Upload APK ${{ matrix.abi }}
         uses: actions/upload-artifact@v4
