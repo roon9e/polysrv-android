@@ -169,6 +169,16 @@ android {
         minSdkVersion 23
         targetSdkVersion 36
 
+        // Ограничение ABI для нативной сборки. Без него библиотечный модуль
+        // компилирует C/C++ для ВСЕХ 4 ABI, даже если APK собирается под одну
+        // (abiFilters в TMessagesProj_App влияет только на упаковку APK).
+        // В CI передаётся -PabiFilters=<abi>, локально — все ABI.
+        def abiFiltersList = ((project.findProperty("abiFilters") ?: "armeabi-v7a,arm64-v8a,x86,x86_64")
+                .toString().split(",") as String[]).collect { it.trim() }.findAll { !it.isEmpty() }
+        ndk {
+            abiFilters(*abiFiltersList)
+        }
+
         buildConfigField "String", "SERVERS_CONFIG_URL", "\"" + (serversEnv['SERVERS_CONFIG_URL'] ?: "") + "\""
         buildConfigField "String", "SERVERS_CONFIG_URL_FALLBACK", "\"" + (serversEnv['SERVERS_CONFIG_URL_FALLBACK'] ?: "") + "\""
         buildConfigField "int", "SERVERS_CONFIG_TIMEOUT_MS", (serversEnv['SERVERS_CONFIG_TIMEOUT_MS'] ?: "5000") + ""

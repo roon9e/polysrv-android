@@ -303,6 +303,10 @@ jobs:
             echo "CCACHE_COMPRESSLEVEL=6"
             echo "CCACHE_MAXSIZE=2G"
             echo "CCACHE_SLOPPINESS=include_file_ctime,include_file_mtime,time_macros,file_stat_matches"
+            # ВАЖНО: по умолчанию ccache сверяет mtime компилятора, а NDK на раннере
+            # ставится заново в каждом прогоне -> хеш менялся и было 0% попаданий.
+            # "content" хеширует содержимое бинарника — стабильно между прогонами.
+            echo "CCACHE_COMPILERCHECK=content"
             echo "USE_CCACHE=1"
           } >> $GITHUB_ENV
           ccache --version | head -1
