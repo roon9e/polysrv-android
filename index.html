@@ -34,9 +34,10 @@
   .files { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
   .files a { text-decoration: none; border: 1px solid #22303c; border-radius: 8px; padding: 9px 13px; font-size: 14px; }
   .files a:hover { background: #16212c; }
-  .upd { margin-top: 6px; font-size: 14px; color: #b8c6d4; overflow-wrap: anywhere; }
-  .foot { margin-top: 28px; color: #64798c; font-size: 13px; overflow-wrap: anywhere; }
-  .meta { color: #64798c; font-size: 13px; margin-top: 12px; overflow-wrap: anywhere; }
+  .upd { margin-top: 6px; font-size: 14px; color: #b8c6d4; overflow-wrap: break-word; }
+  .foot { margin-top: 28px; color: #64798c; font-size: 13px; overflow-wrap: break-word; }
+  .meta { color: #64798c; font-size: 13px; margin-top: 12px; overflow-wrap: break-word; }
+  .nb { white-space: nowrap; }
   code.k { color: #7ee0b8; }
   @media (min-width: 600px) {
     body { padding: 32px 20px 60px; }
@@ -135,8 +136,8 @@ async function loadUpdate() {
   try {
     const r = await fetch('update.json?t=' + Date.now(), {cache: 'no-store'});
     const d = await r.json();
-    let html = 'version <b>' + (d.version || '?') + '</b> (code ' + (d.versionCode || '?') + ')';
-    if (d.updated) html += ' · updated ' + d.updated;
+    let html = 'version <b>' + (d.version || '?') + '</b> <span class="nb">(code ' + (d.versionCode || '?') + ')</span>';
+    if (d.updated) html += ' · updated <span class="nb">' + d.updated + '</span>';
     if (d.apkUrl) {
       html += '<br><a href="' + d.apkUrl + '">Download APK</a>';
       if (d.sha256) html += ' <span class="addr">sha256 ' + d.sha256.slice(0, 16) + '…</span>';
