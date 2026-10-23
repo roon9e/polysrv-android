@@ -3,36 +3,50 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#17212b">
 <title>PolySrv — servers and updates</title>
 <style>
   :root { color-scheme: dark; }
-  body { margin: 0; padding: 32px 20px 60px; background: #17212b; color: #e6edf3;
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; padding: 28px 16px 56px; background: #17212b; color: #e6edf3;
          font: 16px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
   .wrap { max-width: 760px; margin: 0 auto; }
   h1 { margin: 0 0 4px; font-size: 26px; }
-  .sub { color: #8fa3b5; margin-bottom: 26px; font-size: 14px; }
+  .sub { color: #8fa3b5; margin-bottom: 24px; font-size: 14px; overflow-wrap: anywhere; }
   .card { background: #0f1620; border: 1px solid #22303c; border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
   .ttl { font-weight: 600; margin-bottom: 12px; }
-  .row { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+  .row { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto;
+         column-gap: 9px; row-gap: 3px; align-items: center; margin-bottom: 14px; }
   .row:last-child { margin-bottom: 0; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: #3aa675; flex: 0 0 auto;
-         box-shadow: 0 0 6px rgba(58,166,117,.55); }
+  .dot { grid-row: 1; grid-column: 1; width: 9px; height: 9px; border-radius: 50%;
+         background: #3aa675; box-shadow: 0 0 6px rgba(58,166,117,.55); }
   .dot.bad { background: #d05a5a; box-shadow: 0 0 6px rgba(208,90,90,.5); }
   .dot.idle { background: #6b7f92; box-shadow: none; }
-  .name { font-weight: 600; }
-  .addr { color: #7f95a8; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .badge { margin-left: auto; font-size: 12px; padding: 3px 9px; border-radius: 999px;
-           background: #1d2b38; color: #8fa3b5; white-space: nowrap; }
+  .name { grid-row: 1; grid-column: 2; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+  .addr { grid-row: 2; grid-column: 2 / 4; min-width: 0; color: #7f95a8; font-size: 13px;
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+  .badge { grid-row: 1; grid-column: 3; justify-self: end; font-size: 12px; padding: 3px 9px;
+           border-radius: 999px; background: #1d2b38; color: #8fa3b5; white-space: nowrap; }
   .badge.tg { background: #2b5278; color: #cfe4ff; }
   a { color: #6ab3f3; }
-  code { background: #0b1118; padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+  code { background: #0b1118; padding: 2px 6px; border-radius: 6px; font-size: 13px; overflow-wrap: anywhere; }
   .files { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
-  .files a { text-decoration: none; border: 1px solid #22303c; border-radius: 8px; padding: 7px 12px; font-size: 14px; }
+  .files a { text-decoration: none; border: 1px solid #22303c; border-radius: 8px; padding: 9px 13px; font-size: 14px; }
   .files a:hover { background: #16212c; }
-  .upd { margin-top: 6px; font-size: 14px; color: #b8c6d4; }
-  .foot { margin-top: 28px; color: #64798c; font-size: 13px; }
-  .meta { color: #64798c; font-size: 13px; margin-top: 10px; }
+  .upd { margin-top: 6px; font-size: 14px; color: #b8c6d4; overflow-wrap: anywhere; }
+  .foot { margin-top: 28px; color: #64798c; font-size: 13px; overflow-wrap: anywhere; }
+  .meta { color: #64798c; font-size: 13px; margin-top: 12px; overflow-wrap: anywhere; }
   code.k { color: #7ee0b8; }
+  @media (min-width: 600px) {
+    body { padding: 32px 20px 60px; }
+    .sub { margin-bottom: 26px; }
+  }
+  @media (max-width: 380px) {
+    h1 { font-size: 23px; }
+    .card { padding: 14px 15px; }
+    .badge { font-size: 11px; padding: 3px 8px; }
+  }
 </style>
 </head>
 <body>
@@ -110,7 +124,7 @@ async function loadServers() {
       .filter(s => typeof s.pingMs === 'number' && s.pingMs >= 0)
       .map(s => (s.name || s.id) + ' ' + s.pingMs + ' ms');
     if (pings.length) parts.push('ping: ' + pings.join(', '));
-    document.getElementById('checked').innerHTML = parts.length ? parts.join(' &nbsp;·&nbsp; ') : '';
+    document.getElementById('checked').innerHTML = parts.length ? parts.join(' · ') : '';
   } catch (e) {
     box.innerHTML = '<div class="addr">failed to load servers.json</div>';
   }
