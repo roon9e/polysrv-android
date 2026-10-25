@@ -38,6 +38,27 @@ def git(*args, binary=False):
     return res.stdout if binary else res.stdout.decode("utf-8", "replace")
 
 
+# Правки, которые не должны зависеть от изменчивых строк апстрима.
+# Для build.gradle это номер -DANDROID_PLATFORM (апстрим уже менял 21 -> 23):
+# такой хунк генерируется как regexp-правка, а не как точная строка.
+REGEX_EDITS = {
+    "TMessagesProj/build.gradle": [
+        {
+            "old_regex": r"^(\s*)arguments '-DANDROID_STL=c\+\+_static', '-DANDROID_PLATFORM=(android-\d+)'(.*)$",
+            "new": (
+                r"\1// ccache для CI: повторные сборки натива ускоряются в разы.\n"
+                r"\1// Включается только при USE_CCACHE=1 (в CI), локально не влияет.\n"
+                r"\1def cmakeArgs = ['-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=\2']\3\n"
+                r"\1if (System.getenv('USE_CCACHE') == '1') {\n"
+                r"\1    cmakeArgs += ['-DCMAKE_C_COMPILER_LAUNCHER=ccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache']\n"
+                r"\1}\n"
+                r"\1arguments(*cmakeArgs)"
+            ),
+        }
+    ],
+}
+
+
 def parse_diff(diff_text):
     """Разбирает unified diff -> {path: {"mode":..., "hunks":[...]}}"""
     files = {}
@@ -110,6 +131,12 @@ def main():
         edits = []
         for h in info["hunks"]:
             edits.append({"old": "\n".join(h["old"]), "new": "\n".join(h["new"])})
+        special = REGEX_EDITS.get(path)
+        if special:
+            # выкидываем точный хунк с изменчивой строкой — вместо него regexp
+            edits = [e for e in edits
+                     if "ANDROID_PLATFORM" not in e["old"] and "ANDROID_PLATFORM" not in e["new"]]
+            edits.extend(special)
         if edits:
             out["files"][path] = {"mode": "modify", "edits": edits}
 

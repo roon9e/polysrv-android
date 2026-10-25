@@ -165,6 +165,18 @@ def patch_project(target, edits_file, reverse=False, check=False, only=None, ski
 
         file_ok, file_skip = 0, 0
         for edit in spec.get("edits", []):
+            # regexp-правка: не зависит от изменчивых строк апстрима
+            if "old_regex" in edit:
+                if reverse:
+                    file_skip += 1
+                    skipped_list.append(f"{rel}: regexp-правка не поддерживает --reverse")
+                    continue
+                text, count = re.subn(edit["old_regex"], edit["new"], text, count=1, flags=re.M)
+                if count:
+                    file_ok += 1
+                else:
+                    file_skip += 1
+                continue
             old, new = edit["old"], edit["new"]
             if reverse:
                 old, new = new, old

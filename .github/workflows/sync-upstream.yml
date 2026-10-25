@@ -116,9 +116,22 @@ jobs:
           set -e
           git remote add upstream https://github.com/DrKLO/Telegram.git 2>/dev/null || \
           git remote set-url upstream https://github.com/DrKLO/Telegram.git
-          # Тянем только tip (история не нужна: патч накладывается на дерево),
-          # fallback на HEAD — если апстрим переименует ветку master.
-          git fetch --depth=1 --no-tags upstream master || git fetch --depth=1 --no-tags upstream HEAD
+          # Тянем только tip. Одного --depth=1 мало: ветка результата должна иметь
+          # общую историю с master, иначе GitHub не сможет построить diff для PR.
+          # Поэтому углубляем историю, пока не появится merge-base с нашим HEAD.
+          if ! git fetch --depth=1 --no-tags upstream master; then
+            git fetch --depth=1 --no-tags upstream HEAD
+          fi
+          for deepen in 50 200 1000 5000; do
+            if git merge-base FETCH_HEAD HEAD >/dev/null 2>&1; then break; fi
+            echo "история апстрима ещё не связана с нашей — углубляю на $deepen"
+            git fetch --deepen=$deepen --no-tags upstream master || break
+          done
+          if git merge-base FETCH_HEAD HEAD >/dev/null 2>&1; then
+            echo "общая история с апстримом: $(git merge-base FETCH_HEAD HEAD)"
+          else
+            echo "::warning::общая история с апстримом не найдена — PR может не создаться"
+          fi
           NEW_SHA=$(git rev-parse FETCH_HEAD)
           echo "sha=$NEW_SHA" >> "$GITHUB_OUTPUT"
           echo "upstream commit: $NEW_SHA"
