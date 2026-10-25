@@ -219,8 +219,9 @@ jobs:
           # ничего не пушим.
           git fetch --depth=1 origin "$BRANCH" 2>/dev/null || true
           REMOTE_TREE=$(git rev-parse "origin/$BRANCH^{tree}" 2>/dev/null || echo "")
-          if [ -n "$REMOTE_TREE" ] && [ "$REMOTE_TREE" = "$NEW_TREE" ]; then
-            echo "дерево совпадает с удалённой веткой $BRANCH — ничего не изменилось"
+          REMOTE_PARENT=$(git rev-parse "origin/$BRANCH^1" 2>/dev/null || echo "")
+          if [ -n "$REMOTE_TREE" ] && [ "$REMOTE_TREE" = "$NEW_TREE" ] && [ "$REMOTE_PARENT" = "$BASE_SHA" ]; then
+            echo "ветка $BRANCH уже указывает на master — ничего не изменилось"
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             COMMIT=$(git -c user.name="github-actions[bot]" \
