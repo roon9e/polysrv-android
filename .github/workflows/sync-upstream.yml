@@ -229,7 +229,9 @@ jobs:
       - name: Open or update PR
         if: ${{ steps.commit.outputs.changed != '' && steps.opts.outputs.open_pr == 'true' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Если включено "Allow GitHub Actions to create and approve pull requests",
+          # хватит GITHUB_TOKEN. Иначе можно положить PAT в секрет SYNC_PAT.
+          GH_TOKEN: ${{ secrets.SYNC_PAT || secrets.GITHUB_TOKEN }}
         run: |
           set -e
           BRANCH="${{ steps.opts.outputs.branch }}"
