@@ -40,7 +40,9 @@ python3 scripts/patch_polysrv.py --target /tmp/tg --check --strict
 * тянет `DrKLO/Telegram`, накладывает наши правки, проверяет, что ключевые куски на месте;
 * кладёт результат в ветку `upstream-sync`;
 * открывает/обновляет PR из этой ветки в `master` (переключатель `open_pr`,
-  по умолчанию включён);
+  по умолчанию включён); для этого в Settings → Actions → General → Workflow
+  permissions должно быть включено «Allow GitHub Actions to create and approve
+  pull requests», иначе PR не создастся (sync при этом не упадёт);
 * по желанию собирает APK (все ABI, либо только arm64 при `fast_build`) и отдаёт его артефактом;
 * если наши правки больше не ложатся на апстрим — воркфлоу падает с отчётом,
   результат **не** коммитится (ничего не ломается молча).

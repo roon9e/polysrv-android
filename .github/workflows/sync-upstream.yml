@@ -227,7 +227,7 @@ jobs:
       # PR создаём/обновляем через gh: ветка уже запушена шагом выше, поэтому
       # отдельный экшен, который сам коммитит и пушит, здесь не нужен.
       - name: Open or update PR
-        if: ${{ steps.commit.outputs.changed == 'true' && steps.opts.outputs.open_pr == 'true' }}
+        if: ${{ steps.commit.outputs.changed != '' && steps.opts.outputs.open_pr == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -245,12 +245,19 @@ jobs:
           EXISTING=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base "$BASE" \
             --state open --json number --jq '.[0].number // empty')
           if [ -n "$EXISTING" ]; then
-            gh pr edit "$EXISTING" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
+            gh pr edit "$EXISTING" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY" \
+              || echo "::warning::не удалось обновить PR #$EXISTING"
             echo "обновлён PR #$EXISTING ($BRANCH -> $BASE)"
           else
-            gh pr create --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base "$BASE" \
-              --title "$TITLE" --body "$BODY"
-            echo "создан PR $BRANCH -> $BASE"
+            # GITHUB_TOKEN не может создавать PR, пока в настройках репозитория не включено
+            # Settings -> Actions -> General -> "Allow GitHub Actions to create and approve
+            # pull requests". Не роняем из-за этого весь sync — просто предупреждаем.
+            if gh pr create --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base "$BASE" \
+                 --title "$TITLE" --body "$BODY"; then
+              echo "создан PR $BRANCH -> $BASE"
+            else
+              echo "::warning::PR не создан. Включи Settings -> Actions -> General -> Workflow permissions -> Allow GitHub Actions to create and approve pull requests. Ветка $BRANCH запушена."
+            fi
           fi
 
       - name: Init submodules
