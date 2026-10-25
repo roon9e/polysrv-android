@@ -8,8 +8,8 @@ name: Sync upstream
 # Или автоматически каждые 6 часов.
 #
 # Результат коммитится в ветку `branch` (по умолчанию upstream-sync), если включён
-# переключатель `commit_result`. PR автоматически не открывается — его можно
-# открыть вручную из этой ветки.
+# переключатель `commit_result`. PR из этой ветки в master открывается/обновляется
+# автоматически, если включён `open_pr` (по умолчанию включён).
 #
 # Если апстрим не изменился — воркфлоу заканчивается сразу, без патча/сборки.
 # Сборка идёт в матрице: каждый ABI собирается в своём job'е (параллельно),
@@ -32,6 +32,10 @@ on:
         description: 'Коммитить результат в ветку (выключи, если нужна только сборка)'
         type: boolean
         default: true
+      open_pr:
+        description: 'Открыть/обновить PR из ветки результата в master'
+        type: boolean
+        default: true
       fast_build:
         description: 'Быстрая сборка: только arm64-v8a (в ~4 раза быстрее, APK без других архитектур)'
         type: boolean
@@ -43,6 +47,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: sync-upstream
@@ -55,8 +60,8 @@ jobs:
     timeout-minutes: 120
     outputs:
       build: ${{ steps.opts.outputs.build_apk }}
-      fast: ${{ steps.opts.outputs.fast_build }}
       branch: ${{ steps.opts.outputs.branch }}
+      abis: ${{ steps.opts.outputs.abis }}
       up_to_date: ${{ steps.fetch.outputs.up_to_date }}
 
     steps:
@@ -70,14 +75,27 @@ jobs:
         run: |
           # На событии schedule входы inputs.* пустые, поэтому считаем флаги явно:
           # "false" -> выключено, иначе включено.
+          BUILD_APK=$([ "${{ inputs.build_apk }}" = "false" ] && echo false || echo true)
+          FAST_BUILD=$([ "${{ inputs.fast_build }}" = "true" ] && echo true || echo false)
+          FORCE=$([ "${{ inputs.force }}" = "true" ] && echo true || echo false)
+          COMMIT=$([ "${{ inputs.commit_result }}" = "false" ] && echo false || echo true)
+          OPEN_PR=$([ "${{ inputs.open_pr }}" = "false" ] && echo false || echo true)
+          BRANCH="${{ inputs.branch || 'upstream-sync' }}"
+          if [ "$FAST_BUILD" = "true" ]; then
+            ABIS='["arm64-v8a"]'
+          else
+            ABIS='["armeabi-v7a","arm64-v8a","x86","x86_64"]'
+          fi
           {
-            echo "build_apk=$([ "${{ inputs.build_apk }}" = "false" ] && echo false || echo true)"
-            echo "fast_build=$([ "${{ inputs.fast_build }}" = "true" ] && echo true || echo false)"
-            echo "force=$([ "${{ inputs.force }}" = "true" ] && echo true || echo false)"
-            echo "commit=$([ "${{ inputs.commit_result }}" = "false" ] && echo false || echo true)"
-            echo "branch=${{ inputs.branch || 'upstream-sync' }}"
-          } >> $GITHUB_OUTPUT
-          echo "build_apk=${{ steps.opts.outputs.build_apk }} fast_build=${{ steps.opts.outputs.fast_build }} commit=${{ steps.opts.outputs.commit }} branch=${{ steps.opts.outputs.branch }}"
+            echo "build_apk=$BUILD_APK"
+            echo "fast_build=$FAST_BUILD"
+            echo "force=$FORCE"
+            echo "commit=$COMMIT"
+            echo "open_pr=$OPEN_PR"
+            echo "branch=$BRANCH"
+            echo "abis=$ABIS"
+          } >> "$GITHUB_OUTPUT"
+          echo "build_apk=$BUILD_APK fast_build=$FAST_BUILD commit=$COMMIT open_pr=$OPEN_PR force=$FORCE branch=$BRANCH abis=$ABIS"
 
       - name: Check that polysrv_edits.json is up to date
         run: |
@@ -193,6 +211,35 @@ jobs:
           # Отпускаем ветку (она занята worktree'ом) — дальше дерево используется для сборки.
           git checkout --detach
 
+      # PR создаём/обновляем через gh: ветка уже запушена шагом выше, поэтому
+      # отдельный экшен, который сам коммитит и пушит, здесь не нужен.
+      - name: Open or update PR
+        if: ${{ steps.commit.outputs.changed == 'true' && steps.opts.outputs.open_pr == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          BRANCH="${{ steps.opts.outputs.branch }}"
+          BASE="${{ github.event.repository.default_branch || 'master' }}"
+          if [ -z "$BRANCH" ] || [ "$BRANCH" = "$BASE" ]; then
+            echo "ветка результата совпадает с базовой — PR не нужен"
+            exit 0
+          fi
+          SHA="${{ steps.fetch.outputs.sha }}"
+          SHORT=$(git rev-parse --short "$SHA")
+          TITLE="Sync with upstream DrKLO/Telegram ($SHORT)"
+          BODY=$(printf 'Автосинхронизация с апстримом [DrKLO/Telegram@%s](https://github.com/DrKLO/Telegram/commit/%s).\n\nНаши правки наложены заново из `scripts/polysrv_edits.json`.\n\nПеред мержем проверь, что сборка зелёная и правки на месте.\n' "$SHORT" "$SHA")
+          EXISTING=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base "$BASE" \
+            --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh pr edit "$EXISTING" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
+            echo "обновлён PR #$EXISTING ($BRANCH -> $BASE)"
+          else
+            gh pr create --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --base "$BASE" \
+              --title "$TITLE" --body "$BODY"
+            echo "создан PR $BRANCH -> $BASE"
+          fi
+
       - name: Init submodules
         if: ${{ steps.opts.outputs.build_apk == 'true' && steps.srccache.outputs.cache-hit != 'true' }}
         working-directory: /tmp/upstream
@@ -233,7 +280,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        abi: [armeabi-v7a, arm64-v8a, x86, x86_64]
+        abi: ${{ fromJSON(needs.sync.outputs.abis) }}
     steps:
       - name: Checkout our repo
         uses: actions/checkout@v4

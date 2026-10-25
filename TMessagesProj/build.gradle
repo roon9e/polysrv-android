@@ -193,7 +193,7 @@ android {
                 version '3.22.1'
                 // ccache для CI: повторные сборки натива ускоряются в разы.
                 // Включается только при USE_CCACHE=1 (в CI), локально не влияет.
-                def cmakeArgs = ['-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-21'] //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+                def cmakeArgs = ['-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-23'] //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
                 if (System.getenv('USE_CCACHE') == '1') {
                     cmakeArgs += ['-DCMAKE_C_COMPILER_LAUNCHER=ccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache']
                 }

@@ -91,7 +91,7 @@ def parse_diff(diff_text):
 def main():
     base = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_BASE
     diff = git("diff", "--no-color", "-U3", f"{base}..HEAD", "--", ".",
-               ":(exclude)polysrv.patch", ":(exclude)scripts")
+               ":(exclude)polysrv.patch", ":(exclude)scripts", ":(exclude).github")
     parsed = parse_diff(diff)
 
     out = {"base": base, "files": {}}
