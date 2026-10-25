@@ -259,6 +259,14 @@ jobs:
             echo "ветка $BRANCH не отличается от $BASE — PR не нужен"
             exit 0
           fi
+          # Бывает, что коммит есть, а дерево то же (обновились только файлы,
+          # которые в PR не попадают) — пустой PR не открываем.
+          BRANCH_TREE=$(git rev-parse "origin/$BRANCH^{tree}" 2>/dev/null || echo "")
+          BASE_TREE=$(git rev-parse "origin/$BASE^{tree}" 2>/dev/null || echo "")
+          if [ -n "$BRANCH_TREE" ] && [ "$BRANCH_TREE" = "$BASE_TREE" ]; then
+            echo "дерево $BRANCH совпадает с $BASE — пустой PR не нужен"
+            exit 0
+          fi
           SHA="${{ steps.fetch.outputs.sha }}"
           SHORT=$(git rev-parse --short "$SHA")
           TITLE="Sync with upstream DrKLO/Telegram ($SHORT)"
