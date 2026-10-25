@@ -7,9 +7,9 @@ name: Sync upstream
 # Запуск: вкладка Actions -> Sync upstream -> Run workflow.
 # Или автоматически каждые 6 часов.
 #
-# Результат коммитится в ветку `branch` (по умолчанию upstream-sync), если включён
-# переключатель `commit_result`. PR из этой ветки в master открывается/обновляется
-# автоматически, если включён `open_pr` (по умолчанию включён).
+# Результат коммитится в ветку `branch` (по умолчанию upstream-sync) как
+# master + ОДИН коммит, если включён переключатель `commit_result`. PR из этой
+# ветки в master открывается/обновляется автоматически, если включён `open_pr`.
 #
 # Если апстрим не изменился — воркфлоу заканчивается сразу, без патча/сборки.
 # Сборка идёт в матрице: каждый ABI собирается в своём job'е (параллельно),
@@ -194,35 +194,47 @@ jobs:
           BRANCH="${{ steps.opts.outputs.branch }}"
           # SHA апстрима берём из output шага Fetch upstream: в worktree свой FETCH_HEAD
           UPSTREAM_SHA="${{ steps.fetch.outputs.sha }}"
-          # worktree — часть нашего репозитория, коммит уходит прямо в него
-          git checkout -B "$BRANCH" "$UPSTREAM_SHA"
-          # .github (workflow-файлы) в ветку синхронизации не кладём:
-          # дефолтный GITHUB_TOKEN не имеет права менять workflow-файлы,
-          # и такой push отклоняется GitHub'ом.
+          # .github из апстрима в дерево не берём: ниже вернём его из master.
           git rm -r -q --cached .github 2>/dev/null || true
           rm -rf .github
           # запоминаем, с какого апстрима синхронизировались (для ранней проверки)
           echo "$UPSTREAM_SHA" > .upstream-sha
           git add -A
+          APP_TREE=$(git write-tree)
+
+          # Ветку результата делаем как master + ОДИН коммит (а не 90 коммитов
+          # истории апстрима): так PR обновляется одним коммитом и мержится без
+          # конфликтов, а не тащит за собой всю историю DrKLO/Telegram.
+          git fetch --depth=1 origin master 2>/dev/null || true
+          BASE_SHA=$(git rev-parse origin/master)
+          # .github и scripts берём из master: иначе PR удалил бы CI и наши скрипты.
+          TMP_INDEX=$(mktemp)
+          GIT_INDEX_FILE="$TMP_INDEX" git read-tree "$APP_TREE"
+          GIT_INDEX_FILE="$TMP_INDEX" git read-tree --prefix=.github/ "$BASE_SHA:.github"
+          GIT_INDEX_FILE="$TMP_INDEX" git read-tree --prefix=scripts/ "$BASE_SHA:scripts"
+          NEW_TREE=$(GIT_INDEX_FILE="$TMP_INDEX" git write-tree)
+          rm -f "$TMP_INDEX"
+
           # Сравниваем ИТОГОВОЕ ДЕРЕВО с удалённой веткой: если оно идентично —
-          # ничего не коммитим.
+          # ничего не пушим.
           git fetch --depth=1 origin "$BRANCH" 2>/dev/null || true
           REMOTE_TREE=$(git rev-parse "origin/$BRANCH^{tree}" 2>/dev/null || echo "")
-          NEW_TREE=$(git write-tree)
           if [ -n "$REMOTE_TREE" ] && [ "$REMOTE_TREE" = "$NEW_TREE" ]; then
             echo "дерево совпадает с удалённой веткой $BRANCH — ничего не изменилось"
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            git -c user.name="github-actions[bot]" -c user.email="github-actions[bot]@users.noreply.github.com" \
-              commit -m "chore: sync with upstream DrKLO/Telegram $(git rev-parse --short "$UPSTREAM_SHA")"
-            git push --force-with-lease origin "$BRANCH"
+            COMMIT=$(git -c user.name="github-actions[bot]" \
+                          -c user.email="github-actions[bot]@users.noreply.github.com" \
+                          commit-tree "$NEW_TREE" -p "$BASE_SHA" \
+                          -m "chore: sync with upstream DrKLO/Telegram $(git rev-parse --short "$UPSTREAM_SHA")")
+            git update-ref "refs/heads/$BRANCH" "$COMMIT"
+            git push --force origin "refs/heads/$BRANCH:refs/heads/$BRANCH"
+            echo "ветка $BRANCH: master + 1 коммит ($(git rev-parse --short "$COMMIT"))"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
           # Тег с SHA апстрима: по нему следующий прогон поймёт, что синхронизироваться не нужно
           git tag -f upstream-synced "$UPSTREAM_SHA"
           git push --force origin refs/tags/upstream-synced
-          # Отпускаем ветку (она занята worktree'ом) — дальше дерево используется для сборки.
-          git checkout --detach
 
       # PR создаём/обновляем через gh: ветка уже запушена шагом выше, поэтому
       # отдельный экшен, который сам коммитит и пушит, здесь не нужен.

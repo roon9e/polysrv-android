@@ -38,7 +38,8 @@ python3 scripts/patch_polysrv.py --target /tmp/tg --check --strict
 
 * каждые 6 часов + вручную (Actions → Sync upstream → Run workflow);
 * тянет `DrKLO/Telegram`, накладывает наши правки, проверяет, что ключевые куски на месте;
-* кладёт результат в ветку `upstream-sync`;
+* кладёт результат в ветку `upstream-sync` как **master + один коммит** (без истории
+  апстрима — PR не разрастается на десятки коммитов и мержится без конфликтов);
 * открывает/обновляет PR из этой ветки в `master` (переключатель `open_pr`,
   по умолчанию включён); для этого в Settings → Actions → General → Workflow
   permissions должно быть включено «Allow GitHub Actions to create and approve
