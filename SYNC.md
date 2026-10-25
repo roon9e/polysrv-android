@@ -54,7 +54,7 @@ python3 scripts/patch_polysrv.py --target /tmp/tg --check --strict
 
 ```bash
 python3 scripts/generate_polysrv_edits.py [base_commit]
-# base_commit по умолчанию — upstream 13.0.3 (7183)
+# base_commit по умолчанию — upstream 13.1.1 (7237)
 ```
 
 Вручную обычно не нужно: воркфлоу `.github/workflows/update-polysrv-edits.yml`

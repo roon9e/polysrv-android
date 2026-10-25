@@ -19,7 +19,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
 OUT = os.path.join(HERE, "polysrv_edits.json")
-DEFAULT_BASE = "0aae95980"  # upstream 13.0.3 (7183) — база, на которой считались правки
+DEFAULT_BASE = "3de37c8cf"  # upstream 13.1.1 (7237) — база, на которой считаются правки
 
 # Принудительные правила: применяются всегда, независимо от того, что было в базе.
 # Нужны, чтобы параметры подписи/пакета не зависели от состояния апстрима.
@@ -112,7 +112,8 @@ def parse_diff(diff_text):
 def main():
     base = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_BASE
     diff = git("diff", "--no-color", "-U3", f"{base}..HEAD", "--", ".",
-               ":(exclude)polysrv.patch", ":(exclude)scripts", ":(exclude).github")
+               ":(exclude)polysrv.patch", ":(exclude)scripts", ":(exclude).github",
+               ":(exclude).upstream-sha")
     parsed = parse_diff(diff)
 
     out = {"base": base, "files": {}}

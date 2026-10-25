@@ -252,6 +252,13 @@ jobs:
             echo "ветка результата совпадает с базовой — PR не нужен"
             exit 0
           fi
+          # Если ветка уже совпадает с master (например, PR только что смержили) —
+          # PR создавать не из чего.
+          AHEAD=$(git rev-list --count "origin/$BASE..origin/$BRANCH" 2>/dev/null || echo 0)
+          if [ "$AHEAD" = "0" ]; then
+            echo "ветка $BRANCH не отличается от $BASE — PR не нужен"
+            exit 0
+          fi
           SHA="${{ steps.fetch.outputs.sha }}"
           SHORT=$(git rev-parse --short "$SHA")
           TITLE="Sync with upstream DrKLO/Telegram ($SHORT)"
