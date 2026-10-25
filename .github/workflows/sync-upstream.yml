@@ -36,6 +36,10 @@ on:
         description: 'Открыть/обновить PR из ветки результата в master'
         type: boolean
         default: true
+      graft_history:
+        description: 'Подтягивать историю апстрима в master (убирает плашку «behind N» в форке)'
+        type: boolean
+        default: true
       fast_build:
         description: 'Быстрая сборка: только arm64-v8a (в ~4 раза быстрее, APK без других архитектур)'
         type: boolean
@@ -80,6 +84,7 @@ jobs:
           FORCE=$([ "${{ inputs.force }}" = "true" ] && echo true || echo false)
           COMMIT=$([ "${{ inputs.commit_result }}" = "false" ] && echo false || echo true)
           OPEN_PR=$([ "${{ inputs.open_pr }}" = "false" ] && echo false || echo true)
+          GRAFT=$([ "${{ inputs.graft_history }}" = "false" ] && echo false || echo true)
           BRANCH="${{ inputs.branch || 'upstream-sync' }}"
           if [ "$FAST_BUILD" = "true" ]; then
             ABIS='["arm64-v8a"]'
@@ -92,10 +97,11 @@ jobs:
             echo "force=$FORCE"
             echo "commit=$COMMIT"
             echo "open_pr=$OPEN_PR"
+            echo "graft_history=$GRAFT"
             echo "branch=$BRANCH"
             echo "abis=$ABIS"
           } >> "$GITHUB_OUTPUT"
-          echo "build_apk=$BUILD_APK fast_build=$FAST_BUILD commit=$COMMIT open_pr=$OPEN_PR force=$FORCE branch=$BRANCH abis=$ABIS"
+          echo "build_apk=$BUILD_APK fast_build=$FAST_BUILD commit=$COMMIT open_pr=$OPEN_PR graft=$GRAFT force=$FORCE branch=$BRANCH abis=$ABIS"
 
       - name: Check that polysrv_edits.json is up to date
         run: |
@@ -184,6 +190,47 @@ jobs:
           test -f /tmp/upstream/TMessagesProj/src/main/java/org/telegram/polysrv/PolySrvServers.java
           test -f /tmp/upstream/servers.env
           echo "our changes are in place"
+
+      # Плашка «This branch is N commits behind DrKLO:master» появляется, когда
+      # в истории master нет коммитов апстрима (нам переносится только дерево).
+      # Добавляем merge-коммит с апстримом вторым родителем, дерево НЕ меняем:
+      # файлы остаются нашими, но история апстрима становится достижимой.
+      - name: Graft upstream history into master
+        if: ${{ steps.fetch.outputs.up_to_date != 'true' && steps.opts.outputs.commit == 'true' && steps.opts.outputs.graft_history == 'true' }}
+        run: |
+          set -e
+          UPSTREAM_SHA="${{ steps.fetch.outputs.sha }}"
+          SHORT=$(git rev-parse --short "$UPSTREAM_SHA")
+          graft() {
+            git -c user.name="github-actions[bot]" \
+                -c user.email="github-actions[bot]@users.noreply.github.com" \
+                commit-tree "$1^{tree}" -p "$1" -p "$UPSTREAM_SHA" \
+                -m "Merge upstream DrKLO/Telegram $SHORT [skip ci]"
+          }
+          git fetch --depth=1 origin master 2>/dev/null || true
+          BASE=$(git rev-parse origin/master)
+          if git merge-base --is-ancestor "$UPSTREAM_SHA" "$BASE" 2>/dev/null; then
+            echo "история апстрима уже в master — графт не нужен"
+            exit 0
+          fi
+          MERGE=$(graft "$BASE")
+          for attempt in 1 2 3; do
+            if git push origin "$MERGE:refs/heads/master"; then
+              echo "master: история апстрима подтянута ($(git rev-parse --short "$MERGE"))"
+              exit 0
+            fi
+            echo "push отклонён (попытка $attempt) — обновляю master и пробую снова"
+            git fetch --depth=1 origin master
+            BASE=$(git rev-parse origin/master)
+            if git merge-base --is-ancestor "$UPSTREAM_SHA" "$BASE" 2>/dev/null; then
+              echo "история апстрима уже в master — графт не нужен"
+              exit 0
+            fi
+            MERGE=$(graft "$BASE")
+            sleep 5
+          done
+          echo "не удалось подтянуть историю апстрима в master"
+          exit 1
 
       - name: Commit result
         id: commit

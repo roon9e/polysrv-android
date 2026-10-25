@@ -40,6 +40,9 @@ python3 scripts/patch_polysrv.py --target /tmp/tg --check --strict
 * тянет `DrKLO/Telegram`, накладывает наши правки, проверяет, что ключевые куски на месте;
 * кладёт результат в ветку `upstream-sync` как **master + один коммит** (без истории
   апстрима — PR не разрастается на десятки коммитов и мержится без конфликтов);
+* подтягивает историю апстрима в `master` merge-коммитом без изменения файлов
+  (переключатель `graft_history`, по умолчанию включён) — чтобы в форке не висела
+  плашка «behind N commits»;
 * открывает/обновляет PR из этой ветки в `master` (переключатель `open_pr`,
   по умолчанию включён); для этого в Settings → Actions → General → Workflow
   permissions должно быть включено «Allow GitHub Actions to create and approve
