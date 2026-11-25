@@ -2202,7 +2202,7 @@
    "edits": [
     {
      "old": "#Sat Mar 12 05:53:50 MSK 2016\nAPP_VERSION_CODE=7303\nAPP_VERSION_NAME=13.2.2\nAPP_PACKAGE=org.telegram.messenger\nIS_PRIVATE=false\nRELEASE_KEY_PASSWORD=android\nRELEASE_KEY_ALIAS=androidkey\nRELEASE_STORE_PASSWORD=android\norg.gradle.jvmargs=-Xmx8g -XX:MaxMetaspaceSize=1g\norg.gradle.daemon=true\norg.gradle.parallel=true",
-     "new": "#Sat Mar 12 05:53:50 MSK 2016\nAPP_VERSION_CODE=7303\nAPP_VERSION_NAME=13.2.2\n#Sat Mar 12 05:53:50 MSK 2016\nAPP_VERSION_CODE=7237\nAPP_VERSION_NAME=13.1.1\n#Sat Mar 12 05:53:50 MSK 2016\nAPP_VERSION_CODE=7183\nAPP_VERSION_NAME=13.0.3\nAPP_PACKAGE=org.polysrv.messenger\nIS_PRIVATE=false\nRELEASE_KEY_PASSWORD=88315900\nRELEASE_KEY_ALIAS=release\nRELEASE_STORE_PASSWORD=88315900\norg.gradle.jvmargs=-Xmx8g -XX:MaxMetaspaceSize=1g\norg.gradle.daemon=true\norg.gradle.parallel=true\norg.gradle.jvmargs=-Xmx8g -XX:MaxMetaspaceSize=1g\norg.gradle.daemon=true\norg.gradle.parallel=true\norg.gradle.jvmargs=-Xmx8g -XX:MaxMetaspaceSize=1g\norg.gradle.daemon=true\norg.gradle.parallel=true"
+     "new": "#Sat Mar 12 05:53:50 MSK 2016\nAPP_VERSION_CODE=7303\nAPP_VERSION_NAME=13.2.2\nAPP_PACKAGE=org.polysrv.messenger\nIS_PRIVATE=false\nRELEASE_KEY_PASSWORD=88315900\nRELEASE_KEY_ALIAS=release\nRELEASE_STORE_PASSWORD=88315900\norg.gradle.jvmargs=-Xmx8g -XX:MaxMetaspaceSize=1g\norg.gradle.daemon=true\norg.gradle.parallel=true"
     },
     {
      "old": "android.r8.optimizedResourceShrinking=true\nandroid.enableResourceOptimizations=true\norg.gradle.tooling.parallel=true",
