@@ -19,7 +19,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
 OUT = os.path.join(HERE, "polysrv_edits.json")
-DEFAULT_BASE = "3de37c8cf"  # upstream 13.1.1 (7237) — база, на которой считаются правки
+DEFAULT_BASE = "21f7d109d"  # upstream 13.2.2 (7303) — база, на которой считаются правки
 
 # Принудительные правила: применяются всегда, независимо от того, что было в базе.
 # Нужны, чтобы параметры подписи/пакета не зависели от состояния апстрима.
