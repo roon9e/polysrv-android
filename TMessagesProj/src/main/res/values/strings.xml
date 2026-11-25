@@ -11306,13 +11306,9 @@
     <string name="RoundVideoBitrate">Video bitrate</string>
     <string name="RoundVideoGeneralInfo">60 FPS is used only when both front and rear cameras support it. Otherwise recording falls back to 30 FPS.</string>
     <string name="RoundVideoComposition">Composition</string>
-    <string name="RoundVideoGeneralInfo">60 FPS is used only when both front and rear cameras support it. Otherwise recording falls back to 30 FPS.</string>
-    <string name="RoundVideoComposition">Composition</string>
     <string name="RoundVideoCompositionEnabled">Round video styling</string>
     <string name="RoundVideoCompositionInfo">Disable styling to record a plain square without outside-circle blur, dimming or PolySRV overlays.</string>
 
-    <string name="AudioRecorderSettings">Voice Messages</string>
-    <string name="AudioRecorderGeneral">Recorder</string>
     <string name="HeaderSettings">Header</string>
     <string name="HeaderDoneButtonColor">Done button color</string>
     <string name="HeaderDoneButtonColorGlass">White</string>
@@ -11580,7 +11576,6 @@
     <string name="WalletDisableBackupExistingPhraseInfo">Your distributed encrypted backup will be deleted. Your secret phrase will be the only way to recover this wallet.</string>
     <string name="WalletRecipientUnavailable">Recipient wallet is unavailable</string>
     <string name="WalletCollectibleTransferPrepareFailed">Unable to prepare collectible transfer</string>
-    <string name="WalletCollectibleTransferPrepareFailed">Unable to prepare collectible transfer</string>
     <string name="WalletSearchNoResults">There were no results for \"%1$s\".\nTry another name or address.</string>
     <string name="WalletUserWallet">%1$s\'s wallet</string>
     <string name="WalletAddressLinkedToUser">This TON Blockchain address is linked to **%1$s** on PolySRV.</string>
@@ -11590,7 +11585,6 @@
     <string name="WalletTonConnectSessionResponseEmpty">Empty TON Connect session response</string>
     <string name="WalletWidgetNoWallet">Your wallet is not available on this device.</string>
     <string name="WalletWidgetRequestExpired">This request has expired.</string>
-    <string name="WalletTonConnectSessionResponseEmpty">Empty TON Connect session response</string>
     <string name="WalletTonConnectManifestLoadFailed">Could not load dApp manifest: %1$s</string>
     <string name="WalletTonConnectSessionClosed">TON Connect session is closed</string>
     <string name="WalletTransactionSimulationFailed">Transaction simulation failed</string>
