@@ -5794,13 +5794,9 @@ public class PeerStoriesView extends SizeNotifierFrameLayout implements Notifica
                                 "&rid=" + storyItem.fileReference +
                                 "&name=" + URLEncoder.encode(FileLoader.getDocumentFileName(document), "UTF-8") +
                                 "&reference=" + Utilities.bytesToHex(document.file_reference != null ? document.file_reference : new byte[0]) +
-                                "&name=" + URLEncoder.encode(FileLoader.getDocumentFileName(document), "UTF-8") +
-                                "&reference=" + Utilities.bytesToHex(document.file_reference != null ? document.file_reference : new byte[0]) +
                                 "&sid=" + storyItem.id + "&did=" + storyItem.dialogId;
                         uriesToPrepare.add(Uri.parse("srv://" + FileLoader.getAttachFileName(document) + params));
                         documentsToPrepare.add(document);
-                    } catch (UnsupportedEncodingException e) {
-                        e.printStackTrace();
                         if (i == 1 && DownloadSpeedEstimator.isFast()) {
                             // Without a prepared player (low-end devices), still load the start of the next video.
                             // Below high priority, a story load stops after its prefix.
