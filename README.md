@@ -10,7 +10,7 @@ MTProto servers**: pick one on the login screen, or add your own by address and 
 The server list is not hardcoded — it is loaded from a remote JSON file, so servers can be
 added, removed or re-pinged without shipping a new APK.
 
-> 🔗 Built on **MTProto API layer 231**.
+> 🔗 Built on **MTProto API layer 233**.
 
 [![Build](https://github.com/roon9e/polysrv-android/actions/workflows/sync-upstream.yml/badge.svg)](https://github.com/roon9e/polysrv-android/actions/workflows/sync-upstream.yml)
 [![License](https://img.shields.io/badge/license-GPLv2-blue.svg)](LICENSE)
